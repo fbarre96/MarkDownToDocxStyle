@@ -3,7 +3,7 @@ Convert Markdown inside Office Word documents
 
 ## Installation
 
-pip install markdowntodocx
+`pip install markdowntodocx`
 
 ## Usage
 
