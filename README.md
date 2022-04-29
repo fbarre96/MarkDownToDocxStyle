@@ -11,10 +11,12 @@ Convert Markdown inside Office Word documents
 
 **to convert an existing Docx file:**
 
-```
-from markdowntodocx.markdownconverter import markdownToWordInFile
+see examples/example.py
 
-markdownToWordInFile("/mypath/to/document.docx", "output_path.docx")
+```
+from markdowntodocx.markdownconverter import convertMarkdownInFile
+
+convertMarkdownInFile("/mypath/to/document.docx", "output_path.docx", {"Code Car":"CodeStyle"})
 ```
 
 **To convert a python-docx Document object:**

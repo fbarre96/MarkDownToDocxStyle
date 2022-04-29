@@ -17,7 +17,8 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
         "Code": "Code",
         "Code Car": "Code Car",
         "BulletList": "BulletList",
-        "Cell": "Cell"
+        "Cell": "Cell",
+        "Header": "Header"
     }
     if styles_names:
         for key, val in styles_names.items():
@@ -146,7 +147,7 @@ def markdownStrikeThroughToStrike(paragraph, initialRun):
     runs = [initialRun]
     i = 0
     while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?!\w)\~\~([^\~\n]]+)\~\~(?!\w)", "~~")
+        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)~~([^~\n]+)~~(?!\w)", "~~")
         if len(splitted_runs) == 3:
             # THE PYDOCX run.strike does not work
             # Use run.font.strike
@@ -222,6 +223,7 @@ def linkToHyperlinkStyle(paragraph, initialRun, style):
         i+=1
     return runs
 
+
 def splitRunOnMarker(paragraph, run, regexToSearch, markerToRemove):
     regex = re.compile(regexToSearch, re.MULTILINE)
     matched = re.findall(regex, run.text)
@@ -273,12 +275,12 @@ def markdownUnorderedListToWordList(paragraph, style, state):
     return state
 
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
-    if paragraph.text.lstrip().startswith("```"):
+    if paragraph.text.lstrip().startswith("```") and state != "code_block":
         state = "code_block"
         paragraph.text = paragraph.text.split("```")[0].strip()+"```".join(paragraph.text.split("```")[1:]).strip()
     if state == "code_block":
         paragraph.style = code_style
-    if paragraph.text.rstrip().endswith("```") and state == "code_block":
+    if paragraph.text.strip().endswith("```") and state == "code_block":
         state = "normal"
         paragraph.text = "```".join(paragraph.text.split("```")[:-1]).strip()+paragraph.text.split("```")[-1].strip()
     return state
@@ -290,7 +292,13 @@ def markdownToWordInParagraph(document, paragraph, styles_names, state):
     return state
 
 def markdownToWordInRun(document, paragraph, initialRun, styles_names):
-    markdownHeaderToWordStyle(paragraph, initialRun, document.styles[styles_names.get("Header", "Header")])
+    header_style = None
+    for x in document.styles:
+        if x.name == styles_names.get("Header", "Header"):
+            header_style = x
+    if header_style is None:
+        raise KeyError("No style named "+styles_names.get("Header", "Header"))
+    markdownHeaderToWordStyle(paragraph, initialRun, header_style)
     new_runs = set(markdownStrongEmphasisToBold(paragraph, initialRun))
     for run in list(new_runs):
         new_runs |= set(markdownEmphasisToItalic(paragraph, run))
@@ -304,6 +312,7 @@ def markdownToWordInRun(document, paragraph, initialRun, styles_names):
         markdownLinkToHyperlink(paragraph, run, document.styles[styles_names.get("Hyperlink", "Hyperlink")])
     for run in list(new_runs):
         linkToHyperlinkStyle(paragraph, run, document.styles[styles_names.get("Hyperlink", "Hyperlink")])
+
 
 
 
