@@ -372,8 +372,11 @@ def delete_paragraph(paragraph):
 
 
 def downloadImgData(url):
-    data = requests.get(url)
-    if data.status_code != 200:
+    try:
+        data = requests.get(url, timeout=5)
+        if data.status_code != 200:
+            return None
+    except Exception as e:
         return None
     data = data.content
     data = io.BytesIO(data)
