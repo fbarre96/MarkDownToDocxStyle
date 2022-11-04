@@ -45,14 +45,14 @@ def markdownToWordInDocument(document, styles_names=None):
         state = markdownToWordInParagraph(document, paragraph, styles_names, state)
     ps = getParagraphs(document)
     for paragraph in ps:
-        for run in paragraph.runs:
-            markdownToWordInRun(document, paragraph, run, styles_names)
+        state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
     for table in document.tables:
         for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
-                    for run in paragraph.runs:
-                        markdownToWordInRun(document, paragraph, run, styles_names)
+                    state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
+                    # for run in paragraph.runs:
+                    #     markdownToWordInRun(document, paragraph, run, styles_names)
 
 def getParagraphs(document):
     """ Retourne un generateur pour tous les paragraphes du document.
@@ -64,10 +64,8 @@ def getParagraphs(document):
 
 def split_run_in_two(paragraph, run, split_index):
     index_in_paragraph = paragraph._p.index(run.element) # pylint: disable=protected-access
-
     text_before_split = run.text[0:split_index]
     text_after_split = run.text[split_index:]
-    
     run.text = text_before_split
     new_run = paragraph.add_run(text_after_split)
     copy_format_manual(run, new_run)
@@ -91,106 +89,6 @@ def copy_format_manual(runA, runB):
     fontB.size = fontA.size
     fontB.highlight_color = fontA.highlight_color
     fontB.color.rgb = fontA.color.rgb
-
-def markdownHeaderToWordStyle(paragraph, run, style):
-    regexHeaders = re.compile(r"^#{1,6} (.+)$", re.MULTILINE)
-    matched = re.search(regexHeaders, run.text)
-    if matched is not None:
-        run.text = matched.group(1)
-        paragraph.style = style
-    return []
-
-def markdownEmphasisToItalic(paragraph, initialRun):
-    """
-     de _Man-in-the-Middle_ entre le serveur
-     # Absence de support de TLS_FALLBACK_SCSV
-
-    TLS_FALLBACK_SCSV est une option permettant de mitiger les attaques dites de downgrade (type POODLE), afin d’empêcher un attaquant de forcer l’utilisation d’un protocole vulnérable lorsque des protocoles plus récents et sécurisés sont disponibles.
-
-    """
-    runs = [initialRun]
-    i = 0
-    while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)\*([^\*\n]+)\*(?!\w)", "*")
-        if len(splitted_runs) == 3:
-            splitted_runs[1].italic = True
-            runs.append(splitted_runs[1])
-            runs.append(splitted_runs[2])
-        else:
-            splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)\_([^\_\n]+)\_(?!\w)", "_")
-            if len(splitted_runs) == 3:
-                splitted_runs[1].italic = True
-                runs.append(splitted_runs[1])
-                runs.append(splitted_runs[2])
-        i+=1
-    return runs
-
-
-def markdownHighlight(paragraph, initialRun):
-    """
-     de ==Man-in-the-Middle== entre le serveur
-     # Absence de support de TLS_FALLBACK_SCSV
-
-    TLS_FALLBACK_SCSV est une option permettant de mitiger les attaques dites de downgrade (type POODLE), afin d’empêcher un attaquant de forcer l’utilisation d’un protocole vulnérable lorsque des protocoles plus récents et sécurisés sont disponibles.
-
-    """
-
-    runs = [initialRun]
-    i = 0
-    while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)==([^=\n]+)==(?!\w)", "==")
-        if len(splitted_runs) == 3:
-            splitted_runs[1].font.highlight_color = WD_COLOR_INDEX.YELLOW
-            runs.append(splitted_runs[1])
-            runs.append(splitted_runs[2])
-        i+=1
-    return runs
-
-def markdownStrongEmphasisToBold(paragraph, initialRun):
-    runs = [initialRun]
-    i = 0
-    while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)\*\*([^\*\n]+)\*\*(?!\w)", "**")
-        if len(splitted_runs) == 3:
-            splitted_runs[1].bold = True
-            runs.append(splitted_runs[1])
-            runs.append(splitted_runs[2])
-        else:
-            splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)\_\_([^\_\n]+)\_\_(?!\w)", "__")
-            if len(splitted_runs) == 3:
-                splitted_runs[1].bold = True
-                runs.append(splitted_runs[1])
-                runs.append(splitted_runs[2])
-        i+=1
-    return runs
-
-def markdownStrikeThroughToStrike(paragraph, initialRun):
-    runs = [initialRun]
-    i = 0
-    while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)~~([^~\n]+)~~(?!\w)", "~~")
-        if len(splitted_runs) == 3:
-            # THE PYDOCX run.strike does not work
-            # Use run.font.strike
-            splitted_runs[1].font.strike = True
-            runs.append(splitted_runs[1])
-            runs.append(splitted_runs[2])
-        i+=1
-    return runs
-
-def markdownCodeToWordStyle(paragraph, initialRun, style):
-    runs = [initialRun]
-    i = 0
-    while i < len(runs):
-        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)\`([^\`\n]+)\`(?!\w)", "`")
-        if len(splitted_runs) == 3:
-            # THE PYDOCX run.strike does not work
-            # Use run.font.strike
-            splitted_runs[1].style = style
-            runs.append(splitted_runs[1])
-            runs.append(splitted_runs[2])
-        i+=1
-    return runs
 
 def markdownImgToInsertedImage(paragraph, initialRun):
     runs = [initialRun]
@@ -244,18 +142,6 @@ def linkToHyperlinkStyle(paragraph, initialRun, style):
         i+=1
     return runs
 
-
-def splitRunOnMarker(paragraph, run, regexToSearch, markerToRemove):
-    regex = re.compile(regexToSearch, re.MULTILINE)
-    matched = re.findall(regex, run.text)
-    for match in matched:
-        start = run.text.index(markerToRemove+match+markerToRemove)
-        end = start+len(markerToRemove+match+markerToRemove)
-        split_runs = split_run_in_three(paragraph, run, start, end)
-        split_runs[1].text = split_runs[1].text.replace(markerToRemove+match+markerToRemove, match)
-        return split_runs
-    return [run]
-
 def markdownArrayToWordList(document, paragraph, state):
     table_line_regex = re.compile(r"^\|(?:[^\|\n-]*\|)*\s*$", re.MULTILINE)
     matched = re.findall(table_line_regex, paragraph.text)
@@ -307,38 +193,97 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
     return state
 
 def markdownToWordInParagraph(document, paragraph, styles_names, state):
+    
     state = markdownArrayToWordList(document, paragraph, state)
     state = markdownUnorderedListToWordList(paragraph, document.styles[styles_names.get("BulletList","BulletList")], state)
     state = mardownCodeBlockToWordStyle(paragraph, document.styles[styles_names.get("Code","Code")], state)
     return state
 
-def markdownToWordInRun(document, paragraph, initialRun, styles_names):
+
+def markdownToWordInParagraphCar(document, paragraph, styles_names, state):
     header_style = None
     for x in document.styles:
         if x.name == styles_names.get("Header", "Header"):
             header_style = x
     if header_style is None:
         raise KeyError("No style named "+styles_names.get("Header", "Header"))
-    markdownHeaderToWordStyle(paragraph, initialRun, header_style)
-    new_runs = set(markdownStrongEmphasisToBold(paragraph, initialRun))
-    for run in list(new_runs):
-        new_runs |= set(markdownEmphasisToItalic(paragraph, run))
-    for run in list(new_runs):
-        new_runs |= set(markdownStrikeThroughToStrike(paragraph, run))
-    for run in list(new_runs):
-        new_runs |= set(markdownHighlight(paragraph, run))
-    for run in list(new_runs):
-        new_runs |= set(markdownCodeToWordStyle(paragraph, run, document.styles[styles_names.get("Code Car", "Code Car")]))
+    code_style = document.styles[styles_names.get("Code Car", "Code Car")]
+    markdownHeaderToWordStyle(paragraph, header_style)
+    transform_marker(paragraph, "==", setHighlight)
+    transform_marker(paragraph, "**", setBold)
+    transform_marker(paragraph, "__", setBold)
+    transform_marker(paragraph, "*", setItalic)
+    transform_marker(paragraph, "_", setItalic)
+    transform_marker(paragraph, "~~", setStrike)
+    if "`" in paragraph.text:
+        transform_marker(paragraph, "`", lambda r: setCode(r, code_style))
+    runs = paragraph.runs
+    new_runs = set(runs)
     for run in list(new_runs):
         new_runs |= set(markdownImgToInsertedImage(paragraph, run))
     for run in list(new_runs):
         markdownLinkToHyperlink(paragraph, run, document.styles[styles_names.get("Hyperlink", "Hyperlink")])
     for run in list(new_runs):
         linkToHyperlinkStyle(paragraph, run, document.styles[styles_names.get("Hyperlink", "Hyperlink")])
+    return state
+
+def setHighlight(run):
+    run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+
+def setBold(run):
+    run.bold = True
+
+def setItalic(run):
+    run.italic = True
+
+def setStrike(run):
+    run.font.strike = True
+
+def setCode(run, style):
+    run.style = style
+
+def transform_marker(paragraph, marker, func, content_regex=None):
+    len_marker = len(marker) # mesure len before escaping
+    if content_regex is None:
+        content_regex = r"([^"+re.escape(marker[0])+r"\n]*)"
+    marker = re.escape(marker)
+    deletedCars = 0
+    # find every iteration of marker+content+marker in paragraph
+    for match in re.finditer(r"(?<!\w)"+marker+content_regex+marker+r"(?!\w)", paragraph.text, re.MULTILINE):
+        # get starting marker run index and ending marker run index
+        runsIndexes = getRunsIndexFromPositions(paragraph, [match.start(0)-deletedCars, match.end(0)-1-deletedCars])
+        # find marker position in run and split
+        startIndexInRun = re.search(r"(?<!\w)"+marker+content_regex, paragraph.runs[runsIndexes[0]].text,  re.MULTILINE)
+        gens = split_run_in_two(paragraph, paragraph.runs[runsIndexes[0]], startIndexInRun.start(0)+len_marker)
+        gens[0].text = gens[0].text[:-len_marker] # remove marker
+        deletedCars += len_marker # adjust paragraph length accordingly
+        # one run was added so end run is at runs[1] +1
+        # find end marker position in runs and split run
+        endIndexInRun = re.search(content_regex+marker+r"(?!\w)", paragraph.runs[runsIndexes[1]+1].text, re.MULTILINE)
+        gens = split_run_in_two(paragraph, paragraph.runs[runsIndexes[1]+1], endIndexInRun.end(0)-len_marker)
+        gens[1].text = gens[1].text[len_marker:]
+        deletedCars += len_marker
+        # apply transformation func on all runs in between the markers
+        for i in range(runsIndexes[0]+1,runsIndexes[1]+2):
+            func(paragraph.runs[i])
+
+def markdownHeaderToWordStyle(paragraph, header_style):
+    for match in re.finditer(r"^#{1,6} (.+)$", paragraph.text, re.MULTILINE):
+        paragraph.text = re.sub(r"^#{1,6} ", "",paragraph.text)
+        paragraph.style = header_style
 
 
-
-
+def getRunsIndexFromPositions(paragraph, positions):
+    c = 0
+    prev = 0
+    ret = [-1] * len(positions)
+    for i, run in enumerate(paragraph.runs):
+        prev = c
+        c += len(run.text)
+        for j, pos in enumerate(positions):
+            if prev <= pos and pos < c:
+                ret[j] = i
+    return ret
 
 def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
     """
@@ -454,4 +399,4 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})
+    convertMarkdownInFile("/home/barre/dir_win/Modele-web.docx", "examples/out_document.docx") #  {"Code Car":"CodeStyle"}
