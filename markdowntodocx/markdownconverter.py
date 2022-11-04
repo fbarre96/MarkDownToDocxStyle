@@ -4,7 +4,7 @@ import requests
 import docx
 from docx.shared import Cm
 from docx.enum.table import WD_ALIGN_VERTICAL # pylint: disable=no-name-in-module
-from docx.enum.text import WD_BREAK
+from docx.enum.text import WD_BREAK, WD_COLOR_INDEX
 from docx.oxml.xmlchemy import OxmlElement
 from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
@@ -122,6 +122,27 @@ def markdownEmphasisToItalic(paragraph, initialRun):
                 splitted_runs[1].italic = True
                 runs.append(splitted_runs[1])
                 runs.append(splitted_runs[2])
+        i+=1
+    return runs
+
+
+def markdownHighlight(paragraph, initialRun):
+    """
+     de ==Man-in-the-Middle== entre le serveur
+     # Absence de support de TLS_FALLBACK_SCSV
+
+    TLS_FALLBACK_SCSV est une option permettant de mitiger les attaques dites de downgrade (type POODLE), afin d’empêcher un attaquant de forcer l’utilisation d’un protocole vulnérable lorsque des protocoles plus récents et sécurisés sont disponibles.
+
+    """
+
+    runs = [initialRun]
+    i = 0
+    while i < len(runs):
+        splitted_runs = splitRunOnMarker(paragraph, runs[i], r"(?<!\w)==([^=\n]+)==(?!\w)", "==")
+        if len(splitted_runs) == 3:
+            splitted_runs[1].font.highlight_color = WD_COLOR_INDEX.YELLOW
+            runs.append(splitted_runs[1])
+            runs.append(splitted_runs[2])
         i+=1
     return runs
 
@@ -305,6 +326,8 @@ def markdownToWordInRun(document, paragraph, initialRun, styles_names):
     for run in list(new_runs):
         new_runs |= set(markdownStrikeThroughToStrike(paragraph, run))
     for run in list(new_runs):
+        new_runs |= set(markdownHighlight(paragraph, run))
+    for run in list(new_runs):
         new_runs |= set(markdownCodeToWordStyle(paragraph, run, document.styles[styles_names.get("Code Car", "Code Car")]))
     for run in list(new_runs):
         new_runs |= set(markdownImgToInsertedImage(paragraph, run))
@@ -430,3 +453,5 @@ def insert_paragraph_after(paragraph, text=None, style=None):
     return new_para
 
 
+if __name__ == '__main__':
+    convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})

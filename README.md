@@ -37,6 +37,7 @@ document.save("mypath/output_path.docx")
 * Emphasis (*italic*) `*Text*` or `_Text_`:  converts to word italic
 * Strong Emphasis (**Bold**) `**Text**` or `__Text__`:  converts to word bold
 * Strike through (~~Strike~~) `~~Strike~~` : converts to word strike through style
+* Highlight (==highlight==) `==Highlight==' : converts to word Yellow highlight. 
 * Header `# MarkdownHeader1` to `###### MarkdownHeader6`: 
     * Must be in alone in a paragraph. IF NOT, the rest will be erased. 
     * It will use the document style named "Header" by default. 
