@@ -41,16 +41,18 @@ def markdownToWordInDocument(document, styles_names=None):
             default_styles_names[key] = val
     ps = getParagraphs(document)
     state = "normal"
-    for paragraph in ps:
-        state = markdownToWordInParagraph(document, paragraph, styles_names, state)
+    with open("logger.txt", "w") as fout:
+        for paragraph in ps:
+            fout.write(paragraph.text)
+            state = markdownToWordInParagraph(document, paragraph, styles_names, state)
     ps = getParagraphs(document)
     for paragraph in ps:
         state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
+    # for table in document.tables:
+    #     for row in table.rows:
+    #         for cell in row.cells:
+    #             for paragraph in cell.paragraphs:
+    #                 state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
                     # for run in paragraph.runs:
                     #     markdownToWordInRun(document, paragraph, run, styles_names)
 
@@ -201,6 +203,7 @@ def markdownToWordInParagraph(document, paragraph, styles_names, state):
 
 
 def markdownToWordInParagraphCar(document, paragraph, styles_names, state):
+
     header_style = None
     for x in document.styles:
         if x.name == styles_names.get("Header", "Header"):
@@ -399,4 +402,4 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    convertMarkdownInFile("/home/barre/dir_win/Modele-web.docx", "examples/out_document.docx") #  {"Code Car":"CodeStyle"}
+    convertMarkdownInFile("/home/barre/workspace/test.docx", "/home/barre/workspace/test_out.docx", {"Header":"Sous-défaut"}) #  {"Code Car":"CodeStyle"}
