@@ -24,9 +24,12 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
         for key, val in styles_names.items():
             default_styles_names[key] = val
     document = docx.Document(infile)
+    for style_name in default_styles_names.values():
+        if style_name not in document.styles:
+            return False, "Error in template. There is a style missing : "+str(style_name)
     markdownToWordInDocument(document, default_styles_names)
     document.save(outfile)
-    return True
+    return True, outfile
     
 def markdownToWordInDocument(document, styles_names=None):
     default_styles_names = {
@@ -41,10 +44,8 @@ def markdownToWordInDocument(document, styles_names=None):
             default_styles_names[key] = val
     ps = getParagraphs(document)
     state = "normal"
-    with open("logger.txt", "w") as fout:
-        for paragraph in ps:
-            fout.write(paragraph.text)
-            state = markdownToWordInParagraph(document, paragraph, styles_names, state)
+    for paragraph in ps:
+        state = markdownToWordInParagraph(document, paragraph, styles_names, state)
     ps = getParagraphs(document)
     for paragraph in ps:
         state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
