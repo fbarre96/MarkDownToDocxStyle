@@ -374,6 +374,7 @@ def markdownToWordInParagraphCar(document, paragraph, state):
 def setHyperlink(paragraph, run, match, **kwargs):
     run.font.underline = True
     run.style = hyperlink_style
+    deletedCars = len(run.text)
     try:
         link_text = match.group(2)
         link_url = match.group(4)
@@ -395,7 +396,7 @@ def setHyperlink(paragraph, run, match, **kwargs):
     hyperlink.append(run.element)
     paragraph._p[index_in_paragraph:index_in_paragraph] = [hyperlink]
     # Delete this if using a template that has the hyperlink style in it
-    return 0, True, "normal"
+    return deletedCars, False, "normal"
 
 def add_footnote(document):
     _footnotes_part = document._part.part_related_by(RT.FOOTNOTES)
@@ -520,7 +521,9 @@ def transform_regex(paragraph, regex, funcs):
     # find every iteration of marker+content+marker in paragraph
     for match in re.finditer(regex, paragraph.text, re.MULTILINE):
         # get starting marker run index and ending marker run index
-        positions = [x[0]-deletedCars for x in match.regs[1:]] # Get starting pos of match of each group
+        positions = []
+        core_pos = [x[0]-deletedCars for x in match.regs[1:]]
+        positions += core_pos # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
         runs = getRunsFromPositions(paragraph, positions)
         # find marker position in run and split
@@ -536,10 +539,9 @@ def transform_regex(paragraph, regex, funcs):
                 paragraph._p.remove(prev[0]._r)
                 prev = [None,0] # force split
             # Split runs if needed
-            if prev is not None and (run_pos[0] == prev[0] or (prev[1] == 0 and run_pos[1] != 0)):
-                split_run_in_two(paragraph, run_pos[0], run_pos[1])
+            split_run_in_two(paragraph, run_pos[0], run_pos[1])
             prev = run_pos
-        runs = getRunsFromPositions(paragraph, positions)
+        runs = getRunsFromPositions(paragraph, core_pos)
         # apply transformation func on all runs found
         for i, func in enumerate(funcs):
             deleted_count, deleted_run, state = func(paragraph, runs[i][0], match)
