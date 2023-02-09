@@ -22,12 +22,13 @@ convertMarkdownInFile("/mypath/to/document.docx", "output_path.docx", {"Code Car
 **To convert a python-docx Document object:**
 
 ```
-from markdowntodocx.markdownconverter import markdownToWordInDocument
-from docx import Document
+from markdowntodocx.markdownconverter import convertMarkdownInFile
 
-document = Document("/mypath/to/document.docx")
-markdownToWordInFile(document)
-document.save("mypath/output_path.docx")
+res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})
+if res:
+    print("Success : output document path is "+msg)
+else:
+    print("Error in document : "+msg)
 ```
 
 ## Styles and considerations
@@ -42,7 +43,7 @@ document.save("mypath/output_path.docx")
     * Must be in alone in a paragraph. IF NOT, the rest will be erased. 
     * It will use the document style named "Header" by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
-    * E.g : `markdownToWordInFile("/mypath/to/document.docx", "output_path.docx", {"Header":"my_header_style"})`
+    * E.g : `res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"style_name"})`
 * Inline Code `` `Text` `` (`my code`):
     * It will use the document style named "Code" (Caracter format) by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
@@ -61,7 +62,11 @@ my code
     * It will download the image from the hyperlink and insert the picture with a width of 18cm
 
 * Hyperlink `` [google](https://www.google.fr)  `` : Makes it a Word hyperlink [google](https://www.google.fr)
-    * Will also attempt to convert hyperlink : `http://www.google.fr` -> http://www.google.fr
+    * Will also attempt to convert any valid http hyperlink to word : `http://www.google.fr` -> http://www.google.fr
+    * If the link does not start with http, it will be treated as an internal link to a bookmark
+
+* Bookmark ``this will be bookmared with name bookmark1{#bookmark1}
+    * You may hyperlink to it : ``[url text to display](bookmark1)``
 
 * Array to wordlist: (must be alone in a paragraph otherwise the rest  of the paragraph is deleted)
 ```
