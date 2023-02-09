@@ -13,7 +13,7 @@ from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
-
+from docx.oxml.text.run import CT_R
 #### Code rewritten and adapted to handle footnotes from baloo-docx ####
 from docx.opc.part import PartFactory
 from docx.opc.packuri import PackURI
@@ -24,7 +24,12 @@ from docx.opc.constants import NAMESPACE
 from docx.oxml.xmlchemy import (
     BaseOxmlElement, RequiredAttribute, ZeroOrMore, ZeroOrOne
 )
+from docx.shared import Parented
 
+class Footnote(Parented):
+    def __init__(self, f, parent):
+        super().__init__(parent)
+        self._fn = self._element = self.element = f
 
 class CT_Footnotes(BaseOxmlElement):
     """
@@ -87,6 +92,7 @@ class CT_Footnote(BaseOxmlElement):
         self._insert_p(_p)
         return _p
 
+
     def _add_p_with_paragraph(self, para):
         _p = para._p
         # paragraph footnote style
@@ -117,8 +123,13 @@ class CT_FNR(BaseOxmlElement):
         footnoteReference._id = _id
         return footnoteReference
 
-class CT_FootnoteRef (BaseOxmlElement):
+class CT_Hyperlink(BaseOxmlElement):
+    @classmethod
+    def new (cls):
+        ref = OxmlElement('w:hyperlink')
+        return ref      
 
+class CT_FootnoteRef (BaseOxmlElement):
     @classmethod
     def new (cls):
         ref = OxmlElement('w:footnoteRef')
@@ -133,17 +144,51 @@ class FootnotesPart(XmlPart):
         content_type = CT.WML_FOOTNOTES
         element = parse_xml(cls._default_footnotes_xml())
         return cls(partname, content_type, element, package)
+
+
 docx.oxml.register_element_cls('w:footnotes', CT_Footnotes)
 docx.oxml.register_element_cls('w:footnote', CT_Footnote)
 docx.oxml.register_element_cls('w:footnoteReference', CT_FNR)
 docx.oxml.register_element_cls('w:footnoteRef', CT_FootnoteRef)
+docx.oxml.register_element_cls('w:hyperlink', CT_Hyperlink)
 PartFactory.part_type_for[CT.WML_FOOTNOTES] = FootnotesPart
 ##### END OF FOOTNOTES CODE ####
+#### EXTEND PARAGRAPH TO BE ABLE TO READ HYPERLINKS ####
+class Paragraph(docx.text.paragraph.Paragraph):
+    def __init__(self, *args, **kwargs):
+        super().__init__( *args, **kwargs)
+    
+    def get_all_text(self):
+        """
+        String formed by concatenating the text of each run in the paragraph.
+        Tabs and line breaks in the XML are mapped to ``\\t`` and ``\\n``
+        characters respectively.
 
+        Assigning text to this property causes all existing paragraph content
+        to be replaced with a single run containing the assigned text.
+        A ``\\t`` character in the text is mapped to a ``<w:tab/>`` element
+        and each ``\\n`` or ``\\r`` character is mapped to a line break.
+        Paragraph-level formatting, such as style, is preserved. All
+        run-level formatting, such as bold or italic, is removed.
+        """
+        text = ''
+        for run in self.all_runs:
+            text += run.text
+        return text
+
+    @property
+    def all_runs(self):
+        runs = []
+        for _elem in self._p:
+            if isinstance(_elem, CT_R):
+                runs.append(Run(_elem, self))
+            if isinstance(_elem, CT_Hyperlink):
+                for _r in _elem:
+                    runs.append(Run(_r, _elem))
+        return runs
+####
 footnotes = {}
-
-def convertMarkdownInFile(infile, outfile, styles_names=None):
-    default_styles_names = {
+default_styles_names = {
         "Hyperlink": "Hyperlink",
         "Code": "Code",
         "Code Car": "Code Car",
@@ -151,6 +196,12 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
         "Cell": "Cell",
         "Header": "Header"
     }
+header_style = None
+code_style = None
+hyperlink_style = None
+
+def convertMarkdownInFile(infile, outfile, styles_names=None):
+    global default_styles_names
     if styles_names:
         for key, val in styles_names.items():
             default_styles_names[key] = val
@@ -158,28 +209,29 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
     for style_name in default_styles_names.values():
         if style_name not in document.styles:
             return False, "Error in template. There is a style missing : "+str(style_name)
-    markdownToWordInDocument(document, default_styles_names)
+    
+    global header_style
+    global code_style
+    global hyperlink_style
+    for x in document.styles:
+        if x.name == default_styles_names.get("Header", "Header"):
+            header_style = x
+    if header_style is None:
+        raise KeyError("No style named "+default_styles_names.get("Header", "Header"))
+    code_style = document.styles[default_styles_names.get("Code Car", "Code Car")]
+    hyperlink_style = document.styles[default_styles_names.get("Hyperlink", "Hyperlink")]
+    markdownToWordInDocument(document)
     document.save(outfile)
     return True, outfile
     
-def markdownToWordInDocument(document, styles_names=None):
-    default_styles_names = {
-        "Hyperlink": "Hyperlink",
-        "Code": "Code",
-        "Code Car": "Code Car",
-        "BulletList": "BulletList",
-        "Cell": "Cell"
-    }
-    if styles_names:
-        for key, val in styles_names.items():
-            default_styles_names[key] = val
+def markdownToWordInDocument(document):
     ps = getParagraphs(document)
     state = "normal"
     for paragraph in ps:
-        state = markdownToWordInParagraph(document, paragraph, styles_names, state)
+        state = markdownToWordInParagraph(document, paragraph, state)
     ps = getParagraphs(document)
     for paragraph in ps:
-        state = markdownToWordInParagraphCar(document, paragraph, styles_names, state)
+        state = markdownToWordInParagraphCar(document, paragraph, state)
     
 def getParagraphs(document):
     """ Retourne un generateur pour tous les paragraphes du document.
@@ -268,24 +320,15 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
         paragraph.text = "```".join(paragraph.text.split("```")[:-1]).strip()+paragraph.text.split("```")[-1].strip()
     return state
 
-def markdownToWordInParagraph(document, paragraph, styles_names, state):
-    
+def markdownToWordInParagraph(document, paragraph, state):
     state = markdownArrayToWordList(document, paragraph, state)
-    state = markdownUnorderedListToWordList(paragraph, document.styles[styles_names.get("BulletList","BulletList")], state)
-    state = mardownCodeBlockToWordStyle(paragraph, document.styles[styles_names.get("Code","Code")], state)
+    state = markdownUnorderedListToWordList(paragraph, document.styles[default_styles_names.get("BulletList","BulletList")], state)
+    state = mardownCodeBlockToWordStyle(paragraph, document.styles[default_styles_names.get("Code","Code")], state)
     return state
 
 
-def markdownToWordInParagraphCar(document, paragraph, styles_names, state):
+def markdownToWordInParagraphCar(document, paragraph, state):
     
-    header_style = None
-    for x in document.styles:
-        if x.name == styles_names.get("Header", "Header"):
-            header_style = x
-    if header_style is None:
-        raise KeyError("No style named "+styles_names.get("Header", "Header"))
-    code_style = document.styles[styles_names.get("Code Car", "Code Car")]
-    hyperlink_style = document.styles[styles_names.get("Hyperlink", "Hyperlink")]
     markdownHeaderToWordStyle(paragraph, header_style)
     transform_marker(paragraph, "==", setHighlight)
     transform_marker(paragraph, "**", setBold)
@@ -293,19 +336,19 @@ def markdownToWordInParagraphCar(document, paragraph, styles_names, state):
     transform_marker(paragraph, "*", setItalic)
     transform_marker(paragraph, "_", setItalic)
     transform_marker(paragraph, "~~", setStrike)
-    if "`" in paragraph.text:
-        transform_marker(paragraph, "`", lambda para, run, match: setCode(para, run, match, code_style))
+    transform_marker(paragraph, "`", setCode)
     #bookmarks {#bookmark}
     transform_regex(paragraph, r"({#)([^\}\n]*)(})(?!\w)", (delCar, setBookmark, delCar))
-    lambda_hyperlink = lambda para, run, match: setHyperlink(para, run, match, hyperlink_style)
     # markdown hyper link in the format [text to display](link)
-    transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, lambda_hyperlink, delCar, delCar, delCar))
+    transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
     # markdown image hyper link to incorporate in the format ![alt text to display](link)
     transform_regex(paragraph, r"(\!\[)([^\]|^\n]+)(\]\()([^\)|^\n]+\.(?:png|jpg|jpeg|gif))(\))", (delCar, linkImageToImage, delCar, delCar, delCar))
     # just make left hyperlinks clickable
-    transform_regex(paragraph, r"(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_hyperlink,))
-    #footnotes
+    if "^[" in paragraph.text:
+        print("pass")
+    #LAST IS footnotes BECAUSE THE PARAGRAPH IS MOVED
     #inline footnotes ^[footnote text]
+    
     lambda_foot = lambda para, run, match: setInlineFootnote(document, para, run, match)
     transform_regex(paragraph, r"(\^\[)([^\]\n]*)(\])(?!\w)", (delCar, lambda_foot, delCar))
     # footnotes insertion [^footnote id name]
@@ -321,21 +364,22 @@ def markdownToWordInParagraphCar(document, paragraph, styles_names, state):
             pPr = paragraph._p.get_or_add_pPr()
             rstyle = pPr.get_or_add_pStyle()
             rstyle.val = 'FootnoteText'
-            footnote._insert_p(paragraph._p)
+            footnote._fn._insert_p(paragraph._p)
     else:
         state = transform_regex(paragraph, r"^(\[\^)([^\]\n]*)(\]:)(?!\w)(.+(?:\n[ \t]+.+)*)", (delCar, delCar, delCar, defineFootnote))
+    transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
+    
     return state
 
-def setHyperlink(paragraph, run, match, style=None):
+def setHyperlink(paragraph, run, match, **kwargs):
     run.font.underline = True
-    if style is not None:
-        run.style = style
+    run.style = hyperlink_style
     try:
         link_text = match.group(2)
         link_url = match.group(4)
     except:
-        link_text = match.group(0)
-        link_url = match.group(0)
+        link_text = kwargs.get("text", match.group(0))
+        link_url = kwargs.get("url", match.group(0))
 
     hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
     external =  link_url.startswith("http")
@@ -345,6 +389,7 @@ def setHyperlink(paragraph, run, match, style=None):
         hyperlink.set(docx.oxml.shared.qn('r:id'), r_id, )
     else:
         hyperlink.set(docx.oxml.shared.qn('w:anchor'), link_url)
+    run._parent = hyperlink
     index_in_paragraph = paragraph._p.index(run.element)
     run.element.text = link_text
     hyperlink.append(run.element)
@@ -356,6 +401,8 @@ def add_footnote(document):
     _footnotes_part = document._part.part_related_by(RT.FOOTNOTES)
     footnotes_part = _footnotes_part.element
     footnote = footnotes_part.add_footnote()
+
+    footnote = Footnote(footnote, document._part)
     return footnote
 
 def add_footnote_reference(run, footnote):
@@ -368,12 +415,20 @@ def add_footnote_reference(run, footnote):
 
 def setInlineFootnote(document, paragraph, run, match):
     deletedCars = len(run.text)
-    run.text = ""
+    run.text= ""
     #footnotes
     footnote = add_footnote(document)
-    footnote._add_p(" " + str(match.group(2)))
+    gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
+    
+    
+    if gr is not None:
+        _p = footnote._fn._add_p(str(match.group(2)))
+        para = Paragraph(_p, footnote)
+        setHyperlink(para, para.runs[-1], gr, text=" "+str(match.group(2)))
+    else:
+        _p = footnote._fn._add_p(" " + str(match.group(2)))
     # footnotes reference
-    add_footnote_reference(run, footnote)
+    add_footnote_reference(run, footnote._fn)
     
     return deletedCars, False, "normal"
 
@@ -385,7 +440,7 @@ def declareFootnote(document, paragraph, run, match):
     
     global footnotes
     footnotes[match.group(2)] = footnote
-    add_footnote_reference(run, footnote)
+    add_footnote_reference(run, footnote._fn)
 
     return deletedCars, False, "normal"
 
@@ -393,7 +448,7 @@ def defineFootnote(paragraph, run, match):
     #footnotes
     footnote_id = match.group(2)
     footnote = footnotes[footnote_id]
-    _p = footnote._add_p_with_paragraph(paragraph)
+    _p = footnote._fn._add_p_with_paragraph(paragraph)
     return 0, False, "inFootnoteDefinition:"+str(footnote_id)
 
 
@@ -441,8 +496,8 @@ def setStrike(para, run, match):
     run.font.strike = True
     return 0, False, "normal"
 
-def setCode(para, run, match, style):
-    run.style = style
+def setCode(para, run, match):
+    run.style = code_style
     return 0, False, "normal"
 
 def delCar(para, run, match):
@@ -467,34 +522,28 @@ def transform_regex(paragraph, regex, funcs):
         # get starting marker run index and ending marker run index
         positions = [x[0]-deletedCars for x in match.regs[1:]] # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
-        runsIndexes = getRunsIndexFromPositions(paragraph, positions)
+        runs = getRunsFromPositions(paragraph, positions)
         # find marker position in run and split
         prev = None
-        for indexes in runsIndexes[::-1]:
-            if indexes == -1:
-                prev = [666,0] # force split
+        for run_pos in runs[::-1]:
+            if run_pos is None:
+                prev = [None, 0] # force split
                 continue
             # if previous marker is in-between too runs, merge them
-            if prev is not None and  (indexes[0] != prev[0] and prev[1] > 0):
-                paragraph.runs[indexes[0]].text += paragraph.runs[indexes[0]+1].text
-                paragraph.runs[indexes[0]+1].text = ""
-                paragraph._p.remove(paragraph.runs[indexes[0]+1]._r)
-                prev = [666,0] # force split
-            # Split runs if needed, (maybe always ?)
-            if prev is not None and (indexes[0] == prev[0] or prev[1] == 0):
-                split_run_in_two(paragraph, paragraph.runs[indexes[0]], indexes[1])
-            
-
-            prev = indexes
-        startRun = runsIndexes[0][0]+1 # first run is previous text, can be empty. +1 to skip it
+            if prev is not None and  (run_pos[0] != prev[0] and prev[1] > 0):
+                run_pos.text += prev[0].text
+                prev[0].text = ""
+                paragraph._p.remove(prev[0]._r)
+                prev = [None,0] # force split
+            # Split runs if needed
+            if prev is not None and (run_pos[0] == prev[0] or (prev[1] == 0 and run_pos[1] != 0)):
+                split_run_in_two(paragraph, run_pos[0], run_pos[1])
+            prev = run_pos
+        runs = getRunsFromPositions(paragraph, positions)
         # apply transformation func on all runs found
-        for i,func in enumerate(funcs):
-            if paragraph.runs[startRun+i].text == "":
-                startRun +=1
-            deleted_count, deleted_run, state = func(paragraph, paragraph.runs[startRun+i], match)
+        for i, func in enumerate(funcs):
+            deleted_count, deleted_run, state = func(paragraph, runs[i][0], match)
             deletedCars += deleted_count
-            if deleted_run:
-                startRun -= 1
     return state
 
 def markdownHeaderToWordStyle(paragraph, header_style):
@@ -503,7 +552,7 @@ def markdownHeaderToWordStyle(paragraph, header_style):
         paragraph.style = header_style
 
 
-def getRunsIndexFromPositions(paragraph, positions):
+def getRunsFromPositions(paragraph, positions):
     """returns a list of tuples (runIndex, positionInRun) for each caracter position in the list positions
     example:
         paragraph.text is "This is an *example* of a paragraph"
@@ -529,13 +578,13 @@ def getRunsIndexFromPositions(paragraph, positions):
         """
     countedLetters = 0
     prevCountedLetters = 0
-    ret = [-1] * len(positions)
+    ret = [None] * len(positions)
     for i, run in enumerate(paragraph.runs):
         prevCountedLetters = countedLetters
         countedLetters += len(run.text)
         for j, pos in enumerate(positions):
             if prevCountedLetters <= pos and pos < countedLetters:
-                ret[j] = (i,pos-prevCountedLetters)
+                ret[j] = (run,pos-prevCountedLetters)
     return ret
 
 def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):

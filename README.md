@@ -33,6 +33,8 @@ else:
 
 ## Styles and considerations
     You have to define styles in you word document in order to use Markdown **Headers/titles**, **Hyperlinks**, **Code formatting**, **Arrays**, **Unordered List**.
+
+This styles are either standard markdown or come from extended markdown : https://www.markdownguide.org/extended-syntax/
     
 
 * Emphasis (*italic*) `*Text*` or `_Text_`:  converts to word italic
@@ -67,6 +69,16 @@ my code
 
 * Bookmark ``this will be bookmared with name bookmark1{#bookmark1}
     * You may hyperlink to it : ``[url text to display](bookmark1)``
+
+* Footnotes (BETA) :
+    * Inline foot notes : ``this is a conundrum^[https://fr.wiktionary.org/wiki/conundrum]``
+    * External foot notes : ```
+    This paragraph will have a footnote[^1]
+    And this paragraph will have another[^2]
+    [^1]: This is a footnote with markdown as well **bold**
+        And it can have many lines if they are indented.
+    [^2]: This is the second footnote
+    ```
 
 * Array to wordlist: (must be alone in a paragraph otherwise the rest  of the paragraph is deleted)
 ```
