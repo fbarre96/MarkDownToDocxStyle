@@ -328,7 +328,6 @@ def markdownToWordInParagraph(document, paragraph, state):
 
 
 def markdownToWordInParagraphCar(document, paragraph, state):
-    
     markdownHeaderToWordStyle(paragraph, header_style)
     transform_marker(paragraph, "==", setHighlight)
     transform_marker(paragraph, "**", setBold)
@@ -338,14 +337,12 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "~~", setStrike)
     transform_marker(paragraph, "`", setCode)
     #bookmarks [#bookmark]
-    transform_regex(paragraph, r"([#)([^\]\n]*)(])(?!\w)", (delCar, setBookmark, delCar))
+    transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, setBookmark, delCar))
     # markdown hyper link in the format [text to display](link)
     transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
     # markdown image hyper link to incorporate in the format ![alt text to display](link)
     transform_regex(paragraph, r"(\!\[)([^\]|^\n]+)(\]\()([^\)|^\n]+\.(?:png|jpg|jpeg|gif))(\))", (delCar, linkImageToImage, delCar, delCar, delCar))
     # just make left hyperlinks clickable
-    if "^[" in paragraph.text:
-        print("pass")
     #LAST IS footnotes BECAUSE THE PARAGRAPH IS MOVED
     #inline footnotes ^[footnote text]
     
@@ -386,17 +383,18 @@ def setHyperlink(paragraph, run, match, **kwargs):
     external =  link_url.startswith("http")
     if external:
         part = paragraph.part
+        if kwargs.get("is_footnote", False):
+            part = _footnotes_part = kwargs["document"]._part.part_related_by(RT.FOOTNOTES)
         r_id = part.relate_to(link_url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
-        hyperlink.set(docx.oxml.shared.qn('r:id'), r_id, )
+        hyperlink.set(docx.oxml.shared.qn('r:id'), r_id)
     else:
         hyperlink.set(docx.oxml.shared.qn('w:anchor'), link_url)
-    run._parent = hyperlink
     index_in_paragraph = paragraph._p.index(run.element)
     run.element.text = link_text
     hyperlink.append(run.element)
     paragraph._p[index_in_paragraph:index_in_paragraph] = [hyperlink]
     # Delete this if using a template that has the hyperlink style in it
-    return deletedCars, False, "normal"
+    return deletedCars, True, "normal"
 
 def add_footnote(document):
     _footnotes_part = document._part.part_related_by(RT.FOOTNOTES)
@@ -421,11 +419,10 @@ def setInlineFootnote(document, paragraph, run, match):
     footnote = add_footnote(document)
     gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
     
-    
     if gr is not None:
         _p = footnote._fn._add_p(str(match.group(2)))
         para = Paragraph(_p, footnote)
-        setHyperlink(para, para.runs[-1], gr, text=" "+str(match.group(2)))
+        h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.runs[-1], gr, text=" "+str(match.group(2)), is_footnote=True, document=document)
     else:
         _p = footnote._fn._add_p(" " + str(match.group(2)))
     # footnotes reference
@@ -525,26 +522,34 @@ def transform_regex(paragraph, regex, funcs):
         core_pos = [x[0]-deletedCars for x in match.regs[1:]]
         positions += core_pos # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
-        runs = getRunsFromPositions(paragraph, positions)
+        runs = getRunsIndexFromPositions(paragraph, positions)
+        # merge non-contiuous run matched
+        pos = ([x[0] for x in runs if x is not None])
+        start = min(pos)
+        end = max(pos)
+        while start < end:
+            paragraph.runs[end-1].text += paragraph.runs[end].text
+            paragraph.runs[end].text = ""
+            paragraph._p.remove(paragraph.runs[end]._r)
+            end -= 1
         # find marker position in run and split
+        runs = getRunsIndexFromPositions(paragraph, positions)
         prev = None
         for run_pos in runs[::-1]:
             if run_pos is None:
                 prev = [None, 0] # force split
                 continue
-            # if previous marker is in-between too runs, merge them
-            if prev is not None and  (run_pos[0] != prev[0] and prev[1] > 0):
-                run_pos.text += prev[0].text
-                prev[0].text = ""
-                paragraph._p.remove(prev[0]._r)
-                prev = [None,0] # force split
             # Split runs if needed
-            split_run_in_two(paragraph, run_pos[0], run_pos[1])
+            run = paragraph.runs[run_pos[0]]
+            split_run_in_two(paragraph, run, run_pos[1])
             prev = run_pos
-        runs = getRunsFromPositions(paragraph, core_pos)
+        runs = getRunsIndexFromPositions(paragraph, core_pos)
         # apply transformation func on all runs found
+        deleted_runs = 0
         for i, func in enumerate(funcs):
-            deleted_count, deleted_run, state = func(paragraph, runs[i][0], match)
+            run = paragraph.runs[runs[i][0] - deleted_runs]
+            deleted_count, deleted_run, state = func(paragraph, run, match)
+            deleted_runs += 1 if deleted_run else 0
             deletedCars += deleted_count
     return state
 
@@ -554,7 +559,7 @@ def markdownHeaderToWordStyle(paragraph, header_style):
         paragraph.style = header_style
 
 
-def getRunsFromPositions(paragraph, positions):
+def getRunsIndexFromPositions(paragraph, positions):
     """returns a list of tuples (runIndex, positionInRun) for each caracter position in the list positions
     example:
         paragraph.text is "This is an *example* of a paragraph"
@@ -586,7 +591,7 @@ def getRunsFromPositions(paragraph, positions):
         countedLetters += len(run.text)
         for j, pos in enumerate(positions):
             if prevCountedLetters <= pos and pos < countedLetters:
-                ret[j] = (run,pos-prevCountedLetters)
+                ret[j] = (i,pos-prevCountedLetters)
     return ret
 
 def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
@@ -705,6 +710,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 if __name__ == '__main__':
     res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})
+    
     if res:
         print("Success : output document path is "+msg)
     else:
