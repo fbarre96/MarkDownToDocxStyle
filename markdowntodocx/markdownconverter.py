@@ -337,8 +337,8 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "_", setItalic)
     transform_marker(paragraph, "~~", setStrike)
     transform_marker(paragraph, "`", setCode)
-    #bookmarks {#bookmark}
-    transform_regex(paragraph, r"({#)([^\}\n]*)(})(?!\w)", (delCar, setBookmark, delCar))
+    #bookmarks [#bookmark]
+    transform_regex(paragraph, r"([#)([^\]\n]*)(])(?!\w)", (delCar, setBookmark, delCar))
     # markdown hyper link in the format [text to display](link)
     transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
     # markdown image hyper link to incorporate in the format ![alt text to display](link)
