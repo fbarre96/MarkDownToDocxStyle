@@ -196,30 +196,34 @@ default_styles_names = {
         "Cell": "Cell",
         "Header": "Header"
     }
+styles = {}
 header_style = None
 code_style = None
 hyperlink_style = None
 
 def convertMarkdownInFile(infile, outfile, styles_names=None):
     global default_styles_names
+    global styles
     if styles_names:
         for key, val in styles_names.items():
             default_styles_names[key] = val
     document = docx.Document(infile)
+    for style in document.styles:
+        styles[style.name] = style
     for style_name in default_styles_names.values():
-        if style_name not in document.styles:
+        if style_name not in styles:
             return False, "Error in template. There is a style missing : "+str(style_name)
     
     global header_style
     global code_style
     global hyperlink_style
-    for x in document.styles:
-        if x.name == default_styles_names.get("Header", "Header"):
-            header_style = x
+    for x in styles:
+        if x == default_styles_names.get("Header", "Header"):
+            header_style = styles[default_styles_names.get("Header", "Header")]
     if header_style is None:
         raise KeyError("No style named "+default_styles_names.get("Header", "Header"))
-    code_style = document.styles[default_styles_names.get("Code Car", "Code Car")]
-    hyperlink_style = document.styles[default_styles_names.get("Hyperlink", "Hyperlink")]
+    code_style = styles[default_styles_names.get("Code Car", "Code Car")]
+    hyperlink_style = styles[default_styles_names.get("Hyperlink", "Hyperlink")]
     markdownToWordInDocument(document)
     document.save(outfile)
     return True, outfile
@@ -322,8 +326,8 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
 
 def markdownToWordInParagraph(document, paragraph, state):
     state = markdownArrayToWordList(document, paragraph, state)
-    state = markdownUnorderedListToWordList(paragraph, document.styles[default_styles_names.get("BulletList","BulletList")], state)
-    state = mardownCodeBlockToWordStyle(paragraph, document.styles[default_styles_names.get("Code","Code")], state)
+    state = markdownUnorderedListToWordList(paragraph, styles[default_styles_names.get("BulletList","BulletList")], state)
+    state = mardownCodeBlockToWordStyle(paragraph, styles[default_styles_names.get("Code","Code")], state)
     return state
 
 
@@ -337,7 +341,8 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "~~", setStrike)
     transform_marker(paragraph, "`", setCode)
     #bookmarks [#bookmark]
-    transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, setBookmark, delCar))
+    lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
+    transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))
     # markdown hyper link in the format [text to display](link)
     transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
     # markdown image hyper link to incorporate in the format ![alt text to display](link)
@@ -450,14 +455,19 @@ def defineFootnote(paragraph, run, match):
     return 0, False, "inFootnoteDefinition:"+str(footnote_id)
 
 
-def setBookmark(paragraph, run, match):
+def setBookmark(document, paragraph, run, match):
     """Set the bookmark
     function adapted from https://stackoverflow.com/questions/57586400/how-to-create-bookmarks-in-a-word-document-then-create-internal-hyperlinks-to-t
     """
     tag = run._r
     deleted = len(run.text)
     run.text = ""
-    id = random.randint(0, 100000)
+    body = document._body._body
+    ids = body.xpath('//w:bookmarkStart/@w:id')
+    if ids:
+        id = int(ids[-1]) + 1
+    else:
+        id = 1
     start = docx.oxml.shared.OxmlElement('w:bookmarkStart')
     start.set(docx.oxml.ns.qn('w:id'), str(id))
     start.set(docx.oxml.ns.qn('w:name'), match.group(2))
@@ -609,7 +619,7 @@ def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
     while len(cell.paragraphs) > 0:
         delete_paragraph(cell.paragraphs[0])
     p = cell.add_paragraph(text)
-    p.style = document.styles["Cell"]
+    p.style = styles["Cell"]
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     if p.runs:
         p.runs[0].bold = bold
@@ -709,7 +719,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"CodeStyle"})
     
     if res:
         print("Success : output document path is "+msg)
