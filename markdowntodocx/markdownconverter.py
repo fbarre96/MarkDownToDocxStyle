@@ -409,12 +409,13 @@ def add_footnote(document):
     footnote = Footnote(footnote, document._part)
     return footnote
 
-def add_footnote_reference(run, footnote):
+def add_footnote_reference(run, footnote_element):
     rPr = run._r.get_or_add_rPr()
     rstyle = rPr.get_or_add_rStyle()
     rstyle.val = 'FootnoteReference'
+    run.style = styles["footnote reference"]
     reference = OxmlElement('w:footnoteReference')
-    reference._id = footnote._id
+    reference._id = footnote_element._id
     run._r.append(reference)
 
 def setInlineFootnote(document, paragraph, run, match):
@@ -425,11 +426,16 @@ def setInlineFootnote(document, paragraph, run, match):
     gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
     
     if gr is not None:
-        _p = footnote._fn._add_p(str(match.group(2)))
+        _p = footnote._fn._add_p(" ")
         para = Paragraph(_p, footnote)
-        h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.runs[-1], gr, text=" "+str(match.group(2)), is_footnote=True, document=document)
+        para.style = styles["footnote text"]
+        para.add_run(str(match.group(2)))
+        h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.runs[-1], gr, text=str(match.group(2)), is_footnote=True, document=document)
     else:
         _p = footnote._fn._add_p(" " + str(match.group(2)))
+        para = Paragraph(_p, footnote)
+        para.style = styles["footnote text"]
+    para.runs[0].style = styles["footnote reference"]
     # footnotes reference
     add_footnote_reference(run, footnote._fn)
     
@@ -719,7 +725,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"CodeStyle"})
+    res, msg = convertMarkdownInFile("examples/bug.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"Code Car"})
     
     if res:
         print("Success : output document path is "+msg)
