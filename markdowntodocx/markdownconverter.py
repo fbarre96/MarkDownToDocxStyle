@@ -99,12 +99,15 @@ class CT_Footnote(BaseOxmlElement):
         pPr = _p.get_or_add_pPr()
         rstyle = pPr.get_or_add_pStyle()
         rstyle.val = 'FootnoteText'
+        para.style = styles["footnote text"]
         # run style (with id of run)
         new_run_element = _p._new_r()
         para.runs[0]._element.addprevious(new_run_element)
         rPr = new_run_element.get_or_add_rPr()
         rstyle = rPr.get_or_add_rStyle()
         rstyle.val = 'FootnoteReference'
+        r = Run(new_run_element, para)
+        r.style = styles["footnote reference"]
         ref = OxmlElement('w:footnoteRef')
         new_run_element.append(ref)
         self._insert_p(_p)
@@ -366,6 +369,7 @@ def markdownToWordInParagraphCar(document, paragraph, state):
             pPr = paragraph._p.get_or_add_pPr()
             rstyle = pPr.get_or_add_pStyle()
             rstyle.val = 'FootnoteText'
+            paragraph.style = styles["footnote text"]
             footnote._fn._insert_p(paragraph._p)
     else:
         state = transform_regex(paragraph, r"^(\[\^)([^\]\n]*)(\]:)(?!\w)(.+(?:\n[ \t]+.+)*)", (delCar, delCar, delCar, defineFootnote))
@@ -419,23 +423,21 @@ def add_footnote_reference(run, footnote_element):
     run._r.append(reference)
 
 def setInlineFootnote(document, paragraph, run, match):
+    """Set the inline footnote.
+    run: document run that will be transformed to a footnote."""
     deletedCars = len(run.text)
-    run.text= ""
+    run.text= "" # Run text is removed to be placed inside the footnote paragraph
     #footnotes
-    footnote = add_footnote(document)
+    footnote = add_footnote(document) # create the footnote section for the document (empty)
     gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
-    
-    if gr is not None:
-        _p = footnote._fn._add_p(" ")
-        para = Paragraph(_p, footnote)
-        para.style = styles["footnote text"]
-        para.add_run(str(match.group(2)))
+    _p = footnote._fn._add_p(" ") # create a paragraph with a run containing a space to separate the footnote id from the text
+    para = Paragraph(_p, footnote)
+    para.style = styles["footnote text"] # set footnote style
+    para.add_run(str(match.group(2)))   # put match text inside the footnotes
+    if gr is not None: # is link
         h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.runs[-1], gr, text=str(match.group(2)), is_footnote=True, document=document)
-    else:
-        _p = footnote._fn._add_p(" " + str(match.group(2)))
-        para = Paragraph(_p, footnote)
-        para.style = styles["footnote text"]
-    para.runs[0].style = styles["footnote reference"]
+
+    para.runs[0].style = styles["footnote reference"] # set footnote id style
     # footnotes reference
     add_footnote_reference(run, footnote._fn)
     
@@ -457,6 +459,7 @@ def defineFootnote(paragraph, run, match):
     #footnotes
     footnote_id = match.group(2)
     footnote = footnotes[footnote_id]
+    
     _p = footnote._fn._add_p_with_paragraph(paragraph)
     return 0, False, "inFootnoteDefinition:"+str(footnote_id)
 
@@ -725,7 +728,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/bug.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"Code Car"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"CodeStyle"})
     
     if res:
         print("Success : output document path is "+msg)
