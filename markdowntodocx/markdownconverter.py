@@ -9,6 +9,7 @@ from docx.shared import Cm
 from docx.enum.table import WD_ALIGN_VERTICAL # pylint: disable=no-name-in-module
 from docx.enum.text import WD_BREAK, WD_COLOR_INDEX
 from docx.oxml.xmlchemy import OxmlElement
+from docx.exceptions import InvalidXmlError
 from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
 from docx.text.paragraph import Paragraph
@@ -273,7 +274,10 @@ def copy_format_manual(runA, runB):
     fontB.subscript = fontA.subscript
     fontB.superscript = fontA.superscript
     fontB.size = fontA.size
-    fontB.highlight_color = fontA.highlight_color
+    try:
+        fontB.highlight_color = fontA.highlight_color
+    except InvalidXmlError as e:
+        pass
     fontB.color.rgb = fontA.color.rgb
 
 
@@ -524,9 +528,10 @@ def delCar(para, run, match):
     return ret, True, "normal"
 
 def transform_marker(paragraph, marker, func,content_regex=None):
-    marker = re.escape(marker)
     if content_regex is None:
         content_regex = r"[^"+re.escape(marker[0])+r"\n]*"
+    marker = re.escape(marker)
+    
     regex = r"(?<!\w)"+"("+marker+")("+content_regex+")("+marker+")"+r"(?!\w)"
     return transform_regex(paragraph, regex, (delCar, func, delCar))
 
