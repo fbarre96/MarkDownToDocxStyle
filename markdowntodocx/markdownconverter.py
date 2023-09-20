@@ -306,8 +306,11 @@ def markdownUnorderedListToWordList(paragraph, style, state):
     matched = re.findall(regex, paragraph.text)
     if len(matched) > 0:
         start = paragraph.text.index(matched[0])
-        end = paragraph.text.index(matched[-1])+len(matched[-1])
-        text_end = paragraph.text[end:]
+        try:
+            end = paragraph.text.index(matched[-1], start+len(matched[0]))+len(matched[-1])
+            text_end = paragraph.text[end:]
+        except ValueError:
+            text_end = ""
         paragraph.text = paragraph.text[:start-2].strip() # -2 for list marker + space
         for match in matched:
             new_p = insert_paragraph_after(paragraph)
@@ -321,14 +324,21 @@ def markdownUnorderedListToWordList(paragraph, style, state):
     return state
 
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
-    if paragraph.text.lstrip().startswith("```") and state != "code_block":
-        state = "code_block"
-        paragraph.text = paragraph.text.split("```")[0].strip()+"```".join(paragraph.text.split("```")[1:]).strip()
     if state == "code_block":
         paragraph.style = code_style
-    if paragraph.text.strip().endswith("```") and state == "code_block":
+    if "```" in paragraph.text and state != "code_block":
+        state = "code_block"
+        text_bits = paragraph.text.split("```")
+        paragraph.text = text_bits[0].strip()
+        paragraph = insert_paragraph_after(paragraph, "```".join(text_bits[1:]), code_style)
+
+    
+    if "```" in paragraph.text and state == "code_block":
         state = "normal"
-        paragraph.text = "```".join(paragraph.text.split("```")[:-1]).strip()+paragraph.text.split("```")[-1].strip()
+        text_bits = paragraph.text.split("```")
+        paragraph.text = text_bits[0].strip()
+        insert_paragraph_after(paragraph, "```".join(text_bits[1:]))
+        
     return state
 
 def markdownToWordInParagraph(document, paragraph, state):
