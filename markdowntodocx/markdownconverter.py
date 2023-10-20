@@ -282,7 +282,7 @@ def copy_format_manual(runA, runB):
 
 
 def markdownArrayToWordList(document, paragraph, state):
-    table_line_regex = re.compile(r"^\|(?:[^|\n]*[^-|][^|\n]*\|)*\s*$", re.MULTILINE)
+    table_line_regex = re.compile(r"^\|(?:[^|\n]*[^-|\n][^|\n]*\|)*\s*$", re.MULTILINE)
     matched = re.findall(table_line_regex, paragraph.text)
     if len(matched) == 0:
         return state
@@ -588,8 +588,9 @@ def transform_regex(paragraph, regex, funcs):
     return state
 
 def markdownHeaderToWordStyle(paragraph, header_style):
-    for match in re.finditer(r"^#{1,6} (.+)$", paragraph.text, re.MULTILINE):
-        paragraph.text = re.sub(r"^#{1,6} ", "",paragraph.text)
+    
+    for match in re.finditer(r"^\s*#{1,6} (.+)$", paragraph.text, re.MULTILINE):
+        paragraph.text = re.sub(r"^\s*#{1,6} ", "",paragraph.text)
         paragraph.style = header_style
 
 
@@ -743,8 +744,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header", "Code Car":"CodeStyle"})
-    
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header","Code Car":"CodeStyle"})
     if res:
         print("Success : output document path is "+msg)
     else:
