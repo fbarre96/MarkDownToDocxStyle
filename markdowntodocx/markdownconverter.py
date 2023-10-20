@@ -282,7 +282,7 @@ def copy_format_manual(runA, runB):
 
 
 def markdownArrayToWordList(document, paragraph, state):
-    table_line_regex = re.compile(r"^\|(?:[^\|\n-]*\|)*\s*$", re.MULTILINE)
+    table_line_regex = re.compile(r"^\|(?:[^|\n]*[^-|][^|\n]*\|)*\s*$", re.MULTILINE)
     matched = re.findall(table_line_regex, paragraph.text)
     if len(matched) == 0:
         return state
