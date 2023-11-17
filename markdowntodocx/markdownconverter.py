@@ -387,7 +387,15 @@ def markdownToWordInParagraphCar(document, paragraph, state):
             footnote._fn._insert_p(paragraph._p)
     else:
         state = transform_regex(paragraph, r"^(\[\^)([^\]\n]*)(\]:)(?!\w)(.+(?:\n[ \t]+.+)*)", (delCar, delCar, delCar, defineFootnote))
-    transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
+    # hyperlinks
+    if state.startswith("inFootnoteDefinition"):
+        footnote_id = state.split(":")[1]
+        footnote = footnotes[footnote_id]
+        paragraph = Paragraph(paragraph._p, footnote)
+        lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
+        transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_sethyperlink_footnote,))
+    else:
+        transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
     
     return state
 
