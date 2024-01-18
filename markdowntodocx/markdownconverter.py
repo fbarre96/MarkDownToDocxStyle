@@ -368,7 +368,7 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "~~", setStrike)
     transform_marker(paragraph, "`", setCode)
     
-    transform_regex(paragraph, r"(<color:)([^>]+>.+)(</color>)", (delCar, setColor, delCar))
+    transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
     #bookmarks [#bookmark]
     lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
     transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))
