@@ -19,7 +19,7 @@ from docx.oxml.text.run import CT_R
 from docx.opc.part import PartFactory
 from docx.opc.packuri import PackURI
 from docx.opc.part import XmlPart
-
+from docx.shared import RGBColor
 from docx.oxml.simpletypes import ST_DecimalNumber, ST_String
 from docx.opc.constants import NAMESPACE
 from docx.oxml.xmlchemy import (
@@ -347,6 +347,16 @@ def markdownToWordInParagraph(document, paragraph, state):
     state = mardownCodeBlockToWordStyle(paragraph, styles[default_styles_names.get("Code","Code")], state)
     return state
 
+def setColor(paragraph, run, match):
+    # match.group(0) is <color:RGB>text</color> 
+    # match.group(1) is <color
+    # match.group(2) is RGB>text
+    # match.group(3) is </color>
+    splitted = match.group(2).split(">")
+    run.font.color.rgb = RGBColor.from_string(splitted[0])
+    initial_len = len(run.text)
+    run.text = ">".join(splitted[1:])
+    return initial_len-len(run.text), False, "normal"
 
 def markdownToWordInParagraphCar(document, paragraph, state):
     markdownHeaderToWordStyle(paragraph, header_style)
@@ -357,6 +367,8 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "_", setItalic)
     transform_marker(paragraph, "~~", setStrike)
     transform_marker(paragraph, "`", setCode)
+    
+    transform_regex(paragraph, r"(<color:)([^>]+>.+)(</color>)", (delCar, setColor, delCar))
     #bookmarks [#bookmark]
     lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
     transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))

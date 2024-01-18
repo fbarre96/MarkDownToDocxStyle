@@ -46,6 +46,7 @@ This styles are either standard markdown or come from extended markdown : https:
     * It will use the document style named "Header" by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
     * E.g : `res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"style_name"})`
+* (**EXTENDED SYNTAX FOR WORD**) Change font color `<color:FF0000> this text will be very red because the color is in RGB format</color>`
 * Inline Code `` `Text` `` (`my code`):
     * It will use the document style named "Code" (Caracter format) by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
@@ -67,8 +68,8 @@ my code
     * Will also attempt to convert any valid http hyperlink to word : `http://www.google.fr` -> http://www.google.fr
     * If the link does not start with http, it will be treated as an internal link to a bookmark
 
-* Bookmark ``this will be bookmared with name bookmark1{#bookmark1}
-    * You may hyperlink to it : ``[url text to display](bookmark1)``
+* (**EXTENDED SYNTAX FOR WORD**) Bookmark ``this will be bookmared with name bookmark1{#bookmark1}
+    * You may hyperlink to it : ``[url text to display]{bookmark1}``
 
 * Footnotes (BETA) :
     * Inline foot notes : ``this is a conundrum^[https://fr.wiktionary.org/wiki/conundrum]``
