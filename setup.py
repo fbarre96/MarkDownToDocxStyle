@@ -17,5 +17,5 @@ setup(
     long_description_content_type="text/markdown",
     author='Fabien Barre',
     license='MIT',
-    setup_requires=['python-docx',"requests"],
+    setup_requires=['python-docx==0.8.11',"requests"],
 )
