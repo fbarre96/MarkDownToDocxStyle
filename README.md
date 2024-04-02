@@ -19,18 +19,6 @@ from markdowntodocx.markdownconverter import convertMarkdownInFile
 convertMarkdownInFile("/mypath/to/document.docx", "output_path.docx", {"Code Car":"CodeStyle"})
 ```
 
-**To convert a python-docx Document object:**
-
-```
-from markdowntodocx.markdownconverter import convertMarkdownInFile
-
-res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Code Car":"CodeStyle"})
-if res:
-    print("Success : output document path is "+msg)
-else:
-    print("Error in document : "+msg)
-```
-
 ## Styles and considerations
     You have to define styles in you word document in order to use Markdown **Headers/titles**, **Hyperlinks**, **Code formatting**, **Arrays**, **Unordered List**.
 
