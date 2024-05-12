@@ -8,13 +8,14 @@ import random
 from docx.shared import Cm
 from docx.enum.table import WD_ALIGN_VERTICAL # pylint: disable=no-name-in-module
 from docx.enum.text import WD_BREAK, WD_COLOR_INDEX
-from docx.oxml.xmlchemy import OxmlElement
+from docx.oxml.parser import OxmlElement
 from docx.exceptions import InvalidXmlError
 from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
 from docx.oxml.text.run import CT_R
+from docx.oxml.text.hyperlink import CT_Hyperlink
 #### Code rewritten and adapted to handle footnotes from baloo-docx ####
 from docx.opc.part import PartFactory
 from docx.opc.packuri import PackURI
@@ -127,11 +128,11 @@ class CT_FNR(BaseOxmlElement):
         footnoteReference._id = _id
         return footnoteReference
 
-class CT_Hyperlink(BaseOxmlElement):
-    @classmethod
-    def new (cls):
-        ref = OxmlElement('w:hyperlink')
-        return ref      
+# class CT_Hyperlink(BaseOxmlElement):
+#     @classmethod
+#     def new (cls):
+#         ref = OxmlElement('w:hyperlink')
+#         return ref      
 
 class CT_FootnoteRef (BaseOxmlElement):
     @classmethod
@@ -154,7 +155,7 @@ docx.oxml.register_element_cls('w:footnotes', CT_Footnotes)
 docx.oxml.register_element_cls('w:footnote', CT_Footnote)
 docx.oxml.register_element_cls('w:footnoteReference', CT_FNR)
 docx.oxml.register_element_cls('w:footnoteRef', CT_FootnoteRef)
-docx.oxml.register_element_cls('w:hyperlink', CT_Hyperlink)
+#docx.oxml.register_element_cls('w:hyperlink', CT_Hyperlink)
 PartFactory.part_type_for[CT.WML_FOOTNOTES] = FootnotesPart
 ##### END OF FOOTNOTES CODE ####
 #### EXTEND PARAGRAPH TO BE ABLE TO READ HYPERLINKS ####
@@ -277,6 +278,8 @@ def copy_format_manual(runA, runB):
     try:
         fontB.highlight_color = fontA.highlight_color
     except InvalidXmlError as e:
+        pass
+    except ValueError as e:
         pass
     fontB.color.rgb = fontA.color.rgb
 
