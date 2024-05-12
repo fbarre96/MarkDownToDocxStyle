@@ -194,15 +194,19 @@ class Paragraph(docx.text.paragraph.Paragraph):
 ####
 footnotes = {}
 default_styles_names = {
-        "Hyperlink": "Hyperlink",
-        "Code": "Code",
-        "Code Car": "Code Car",
-        "BulletList": "BulletList",
-        "Cell": "Cell",
-        "Header": "Header"
+        "Hyperlink": ("Hyperlink",),
+        "Code": ("Code", "macro"),
+        "Code Car": ("Code Car", "Macro Text Char"),
+        "BulletList": ("BulletList", "List Paragraph"),
+        "Cell": ("Cell", "No Spacing"),
+        "Header1": ("Heading 1", "Header"),
+        "Header2": ("Heading 2", "Header"),
+        "Header3": ("Heading 3", "Header"),
+        "Header4": ("Heading 4", "Header"),
+        "Header5": ("Heading 5", "Header"),
+        "Header6": ("Heading 6", "Header"),
     }
 styles = {}
-header_style = None
 code_style = None
 hyperlink_style = None
 
@@ -215,20 +219,24 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
     document = docx.Document(infile)
     for style in document.styles:
         styles[style.name] = style
-    for style_name in default_styles_names.values():
-        if style_name not in styles:
-            return False, "Error in template. There is a style missing : "+str(style_name)
-    
-    global header_style
+    for key, style_name in default_styles_names.items():
+        if isinstance(style_name, tuple):
+            found = False
+            for name in style_name:
+                if name in styles:
+                    default_styles_names[key] = name
+                    found = True
+                    break
+            if not found and name != "Hyperlink":
+                return False, "Error in template. There is no "+str(name)+ " style in the doc. Searched for : "+str(key)
+        else:
+            if style_name not in styles and name != "Hyperlink":
+                return False, "Error in template. There is a style missing : "+str(style_name)
     global code_style
     global hyperlink_style
-    for x in styles:
-        if x == default_styles_names.get("Header", "Header"):
-            header_style = styles[default_styles_names.get("Header", "Header")]
-    if header_style is None:
-        raise KeyError("No style named "+default_styles_names.get("Header", "Header"))
-    code_style = styles[default_styles_names.get("Code Car", "Code Car")]
-    hyperlink_style = styles[default_styles_names.get("Hyperlink", "Hyperlink")]
+   
+    code_style = styles.get(default_styles_names.get("Code Car", "Code Car"), "macro")
+    hyperlink_style = styles.get(default_styles_names.get("Hyperlink", "Hyperlink"), None)
     markdownToWordInDocument(document)
     document.save(outfile)
     return True, outfile
@@ -241,6 +249,15 @@ def markdownToWordInDocument(document):
     ps = getParagraphs(document)
     for paragraph in ps:
         state = markdownToWordInParagraphCar(document, paragraph, state)
+    
+
+def markdownToWordFromString(string, outfile):
+    document = docx.Document()
+    paragraphs = string.replace("\r","").split("\n")
+    for para in paragraphs:
+        document.add_paragraph(para)
+    document.save(outfile)
+    return convertMarkdownInFile(outfile, outfile)
     
 def getParagraphs(document):
     """ Retourne un generateur pour tous les paragraphes du document.
@@ -317,7 +334,7 @@ def markdownUnorderedListToWordList(paragraph, style, state):
         paragraph.text = paragraph.text[:start-2].strip() # -2 for list marker + space
         for match in matched:
             new_p = insert_paragraph_after(paragraph)
-            new_p.style = "BulletList"
+            new_p.style = styles[default_styles_names.get("BulletList","BulletList")]
             r = new_p.add_run()
             r.add_text(match)
         if text_end.strip() != "":
@@ -347,7 +364,7 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
 def markdownToWordInParagraph(document, paragraph, state):
     state = markdownArrayToWordList(document, paragraph, state)
     state = markdownUnorderedListToWordList(paragraph, styles[default_styles_names.get("BulletList","BulletList")], state)
-    state = mardownCodeBlockToWordStyle(paragraph, styles[default_styles_names.get("Code","Code")], state)
+    state = mardownCodeBlockToWordStyle(paragraph, styles.get(default_styles_names.get("Code","Code"), "Macro Text"), state)
     return state
 
 def setColor(paragraph, run, match):
@@ -362,7 +379,7 @@ def setColor(paragraph, run, match):
     return initial_len-len(run.text), False, "normal"
 
 def markdownToWordInParagraphCar(document, paragraph, state):
-    markdownHeaderToWordStyle(paragraph, header_style)
+    markdownHeaderToWordStyle(paragraph)
     transform_marker(paragraph, "==", setHighlight)
     transform_marker(paragraph, "**", setBold)
     transform_marker(paragraph, "__", setBold)
@@ -416,7 +433,10 @@ def markdownToWordInParagraphCar(document, paragraph, state):
 
 def setHyperlink(paragraph, run, match, **kwargs):
     run.font.underline = True
-    run.style = hyperlink_style
+    if hyperlink_style is not None:
+        run.style = hyperlink_style
+    else:
+        run.font.color.rgb = RGBColor.from_string("0000FF")
     deletedCars = len(run.text)
     try:
         link_text = match.group(2)
@@ -610,12 +630,15 @@ def transform_regex(paragraph, regex, funcs):
             deletedCars += deleted_count
     return state
 
-def markdownHeaderToWordStyle(paragraph, header_style):
+def markdownHeaderToWordStyle(paragraph):
     
-    for match in re.finditer(r"^\s*#{1,6} (.+)$", paragraph.text, re.MULTILINE):
+    for match in re.finditer(r"^\s*(#{1,6}) (.+)$", paragraph.text, re.MULTILINE):
         paragraph.text = re.sub(r"^\s*#{1,6} ", "",paragraph.text)
-        paragraph.style = header_style
-
+        headersize = len(match.group(1))
+        header_style = styles.get(default_styles_names.get("Header"+str(headersize), "Heading "+str(headersize)), None)
+        if header_style is not None:
+            paragraph.style = header_style
+        
 
 def getRunsIndexFromPositions(paragraph, positions):
     """returns a list of tuples (runIndex, positionInRun) for each caracter position in the list positions
@@ -731,6 +754,8 @@ def set_hyperlink(paragraph, run, url, text, style):
     run.font.underline = True
     if style is not None:
         run.style = style
+    else:
+        run.font.color.rgb = RGBColor(0, 0, 255)
     part = paragraph.part
     r_id = part.relate_to(url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
     index_in_paragraph = paragraph._p.index(run.element)
@@ -767,7 +792,61 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header","Code Car":"CodeStyle"})
+    #res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header","Code Car":"CodeStyle"})
+    res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
+
+## H2 Header: Quick Overview
+Markdown is a lightweight markup language that you can use to add formatting elements to plaintext text documents. Created by John Gruber in 2004, Markdown is now one of the world’s most popular markup languages.
+
+### H3 Header: What Markdown Can Do
+
+#### H4 Header: Formatting Text
+You can do numerous things with Markdown format, including:
+
+- **Bold** text
+- *Italic* text
+- **_Combined emphasis_**
+
+> **Note:** Markdown is not the same as Markup. They’re different, remember!
+
+#### H4 Header: Creating Lists
+
+##### H5 Header: Unordered Lists
+- Item one
+- Item two
+  - Sub Item one
+  - Sub Item two
+
+##### H5 Header: Ordered Lists
+1. First item
+2. Second item
+    1. Subitem
+    2. Subitem
+
+#### H4 Header: Adding Links and Images
+
+Here is a clickable link to [OpenAI](https://www.openai.com), the organization behind Assistant.
+
+Here is an image:
+
+[Alt text for image](https://via.placeholder.com/150)
+
+#### H4 Header: Inserting Code
+
+```python
+# This is some Python code
+def say_hello(name):
+    print("Hello, " + name)
+```
+
+##### H5 Header: Inline Code
+You can also use inline `code` within your text.
+
+### H3 Header: Using Blockquotes
+
+> Markdown uses email-style > characters for blockquoting.
+> It’s very handy for email mimicking."""
+, "examples/out_string.docx")
     if res:
         print("Success : output document path is "+msg)
     else:
