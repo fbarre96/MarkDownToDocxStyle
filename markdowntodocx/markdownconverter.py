@@ -631,9 +631,11 @@ def transform_regex(paragraph, regex, funcs):
     return state
 
 def markdownHeaderToWordStyle(paragraph):
-    
-    for match in re.finditer(r"^\s*(#{1,6}) (.+)$", paragraph.text, re.MULTILINE):
-        paragraph.text = re.sub(r"^\s*#{1,6} ", "",paragraph.text)
+    for match in re.finditer(r"^[ \t]*(#{1,6}) (.+)\s*", paragraph.text, re.MULTILINE):
+        rest = paragraph.text.replace(match.group(0), "").strip()
+        if rest != "":
+            insert_paragraph_after(paragraph, rest)
+        paragraph.text = re.sub(r"^[ \t]*#{1,6} (.+)\s*", r"\1", match.group(0)).strip()
         headersize = len(match.group(1))
         header_style = styles.get(default_styles_names.get("Header"+str(headersize), "Heading "+str(headersize)), None)
         if header_style is not None:
