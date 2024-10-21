@@ -372,8 +372,23 @@ def setColor(paragraph, run, match):
     # match.group(1) is <color
     # match.group(2) is RGB>text
     # match.group(3) is </color>
+    #or
+    # match.group(0) is <span style="color: rgb(0,0,0);">text</span>
+    # match.group(1) is <span style="color: 
+    # match.group(2) is rgb(0,0,0);">text
+    # match.group(3) is </span>
+    
+
     splitted = match.group(2).split(">")
-    run.font.color.rgb = RGBColor.from_string(splitted[0])
+    if splitted[0].startswith("rgb("):
+        r,g,b = splitted[0][4:-1].split(",")
+        b = b.split(")")[0]
+        try:
+            run.font.color.rgb = RGBColor(int(r.strip()), int(g.strip()), int(b.strip()))
+        except ValueError:
+            pass
+    else:
+        run.font.color.rgb = RGBColor.from_string(splitted[0])
     initial_len = len(run.text)
     run.text = ">".join(splitted[1:])
     return initial_len-len(run.text), False, "normal"
@@ -389,6 +404,8 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     transform_marker(paragraph, "`", setCode)
     
     transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
+    transform_regex(paragraph, r"(<span\s+style=\"color: )(.*?>.*?)(</span>)", (delCar, setColor, delCar))
+
     #bookmarks [#bookmark]
     lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
     transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))

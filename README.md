@@ -34,7 +34,7 @@ This styles are either standard markdown or come from extended markdown : https:
     * It will use the document style named "Header" by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
     * E.g : `res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"style_name"})`
-* (**EXTENDED SYNTAX FOR WORD**) Change font color `<color:FF0000> this text will be very red because the color is in RGB format</color>`
+* (**EXTENDED SYNTAX FOR WORD**) Change font color `<color:FF0000> this text will be very red because the color is in RGB format</color>` or `<span style="color: rgb(230, 0, 0);> REd colored text </span>`
 * Inline Code `` `Text` `` (`my code`):
     * It will use the document style named "Code" (Caracter format) by default. 
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
