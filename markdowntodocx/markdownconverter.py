@@ -332,8 +332,9 @@ def markdownUnorderedListToWordList(paragraph, style, state):
         except ValueError:
             text_end = ""
         paragraph.text = paragraph.text[:start-2].strip() # -2 for list marker + space
+        new_p = paragraph # init for loop
         for match in matched:
-            new_p = insert_paragraph_after(paragraph)
+            new_p = insert_paragraph_after(new_p)
             new_p.style = styles[default_styles_names.get("BulletList","BulletList")]
             r = new_p.add_run()
             r.add_text(match)
