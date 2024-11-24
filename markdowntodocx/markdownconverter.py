@@ -311,10 +311,12 @@ def markdownArrayToWordList(document, paragraph, state):
     for i_row, match in enumerate(matched):
         line = match.strip()
         columns = line[1:-1].split("|") # [1:-1] strip beginning and ending pipe
-        if len(columns) != nb_columns:
-            raise ValueError("The array with following headers : "+str(matched[0])+" is supposed to have "+str(nb_columns)+ \
-                                " columns but the line "+str(line)+" has "+str(len(columns))+" columns")
+        # if len(columns) != nb_columns:
+        #     raise ValueError("The array with following headers : "+str(matched[0])+" is supposed to have "+str(nb_columns)+ \
+        #                         " columns but the line "+str(line)+" has "+str(len(columns))+" columns")
         for i_column, column in enumerate(columns):
+            if i_column >= nb_columns:
+                break
             cell = array.cell(i_row, i_column)
             fill_cell(document, cell, column)
     move_table_after(array, paragraph)
@@ -812,61 +814,61 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    #res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx", {"Header":"Header","Code Car":"CodeStyle"})
-    res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
+    res, msg = convertMarkdownInFile("to_debug.docx", "examples/out_document.docx", {"Header":"Header"})
+#     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
-## H2 Header: Quick Overview
-Markdown is a lightweight markup language that you can use to add formatting elements to plaintext text documents. Created by John Gruber in 2004, Markdown is now one of the world’s most popular markup languages.
+# ## H2 Header: Quick Overview
+# Markdown is a lightweight markup language that you can use to add formatting elements to plaintext text documents. Created by John Gruber in 2004, Markdown is now one of the world’s most popular markup languages.
 
-### H3 Header: What Markdown Can Do
+# ### H3 Header: What Markdown Can Do
 
-#### H4 Header: Formatting Text
-You can do numerous things with Markdown format, including:
+# #### H4 Header: Formatting Text
+# You can do numerous things with Markdown format, including:
 
-- **Bold** text
-- *Italic* text
-- **_Combined emphasis_**
+# - **Bold** text
+# - *Italic* text
+# - **_Combined emphasis_**
 
-> **Note:** Markdown is not the same as Markup. They’re different, remember!
+# > **Note:** Markdown is not the same as Markup. They’re different, remember!
 
-#### H4 Header: Creating Lists
+# #### H4 Header: Creating Lists
 
-##### H5 Header: Unordered Lists
-- Item one
-- Item two
-  - Sub Item one
-  - Sub Item two
+# ##### H5 Header: Unordered Lists
+# - Item one
+# - Item two
+#   - Sub Item one
+#   - Sub Item two
 
-##### H5 Header: Ordered Lists
-1. First item
-2. Second item
-    1. Subitem
-    2. Subitem
+# ##### H5 Header: Ordered Lists
+# 1. First item
+# 2. Second item
+#     1. Subitem
+#     2. Subitem
 
-#### H4 Header: Adding Links and Images
+# #### H4 Header: Adding Links and Images
 
-Here is a clickable link to [OpenAI](https://www.openai.com), the organization behind Assistant.
+# Here is a clickable link to [OpenAI](https://www.openai.com), the organization behind Assistant.
 
-Here is an image:
+# Here is an image:
 
-[Alt text for image](https://via.placeholder.com/150)
+# [Alt text for image](https://via.placeholder.com/150)
 
-#### H4 Header: Inserting Code
+# #### H4 Header: Inserting Code
 
-```python
-# This is some Python code
-def say_hello(name):
-    print("Hello, " + name)
-```
+# ```python
+# # This is some Python code
+# def say_hello(name):
+#     print("Hello, " + name)
+# ```
 
-##### H5 Header: Inline Code
-You can also use inline `code` within your text.
+# ##### H5 Header: Inline Code
+# You can also use inline `code` within your text.
 
-### H3 Header: Using Blockquotes
+# ### H3 Header: Using Blockquotes
 
-> Markdown uses email-style > characters for blockquoting.
-> It’s very handy for email mimicking."""
-, "examples/out_string.docx")
+# > Markdown uses email-style > characters for blockquoting.
+# > It’s very handy for email mimicking."""
+# , "examples/out_string.docx")
     if res:
         print("Success : output document path is "+msg)
     else:
