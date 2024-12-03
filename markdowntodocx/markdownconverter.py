@@ -27,7 +27,7 @@ from docx.oxml.xmlchemy import (
     BaseOxmlElement, RequiredAttribute, ZeroOrMore, ZeroOrOne
 )
 from docx.shared import Parented
-
+LIMITE_ITERATIONS=10
 class Footnote(Parented):
     def __init__(self, f, parent):
         super().__init__(parent)
@@ -104,7 +104,7 @@ class CT_Footnote(BaseOxmlElement):
         para.style = styles["footnote text"]
         # run style (with id of run)
         new_run_element = _p._new_r()
-        para.runs[0]._element.addprevious(new_run_element)
+        para.all_runs[0]._element.addprevious(new_run_element)
         rPr = new_run_element.get_or_add_rPr()
         rstyle = rPr.get_or_add_rStyle()
         rstyle.val = 'FootnoteReference'
@@ -163,6 +163,26 @@ class Paragraph(docx.text.paragraph.Paragraph):
     def __init__(self, *args, **kwargs):
         super().__init__( *args, **kwargs)
     
+    def remove(self, element):
+        try:
+            self._p.remove(element)
+        except ValueError:
+            for elem in self._p:
+                if isinstance(elem, CT_Hyperlink):
+                    try:
+                        elem.remove(element)
+                    except ValueError:
+                        pass
+
+    def index(self, element):
+        try:
+            return self._p.index(element)
+        except ValueError:
+            for i, elem in enumerate(self._p):
+                if isinstance(elem, CT_Hyperlink):
+                    if element in elem:
+                        return i
+
     def get_all_text(self):
         """
         String formed by concatenating the text of each run in the paragraph.
@@ -196,7 +216,7 @@ footnotes = {}
 default_styles_names = {
         "Hyperlink": ("Hyperlink",),
         "Code": ("Code", "macro"),
-        "Code Car": ("Code Car", "Macro Text Char"),
+        "Code Car": ("CodeStyle", "Code Car", "Macro Text Char"),
         "BulletList": ("BulletList", "List Paragraph"),
         "Cell": ("Cell", "No Spacing"),
         "Header1": ("Heading 1", "Header"),
@@ -268,7 +288,7 @@ def getParagraphs(document):
         yield Paragraph(p, document._body) # pylint: disable=protected-access
 
 def split_run_in_two(paragraph, run, split_index):
-    index_in_paragraph = paragraph._p.index(run.element) # pylint: disable=protected-access
+    index_in_paragraph = paragraph.index(run.element) # pylint: disable=protected-access
     text_before_split = run.text[0:split_index]
     text_after_split = run.text[split_index:]
     run.text = text_before_split
@@ -397,58 +417,67 @@ def setColor(paragraph, run, match):
     return initial_len-len(run.text), False, "normal"
 
 def markdownToWordInParagraphCar(document, paragraph, state):
-    markdownHeaderToWordStyle(paragraph)
-    transform_marker(paragraph, "==", setHighlight)
-    transform_marker(paragraph, "**", setBold)
-    transform_marker(paragraph, "__", setBold)
-    transform_marker(paragraph, "*", setItalic)
-    transform_marker(paragraph, "_", setItalic)
-    transform_marker(paragraph, "~~", setStrike)
-    transform_marker(paragraph, "`", setCode)
-    
-    transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
-    transform_regex(paragraph, r"(<span\s+style=\"color: )(.*?>.*?)(</span>)", (delCar, setColor, delCar))
+    if paragraph.style.name == code_style.name or paragraph.style.name == "Code":
+        return state
+    if "www.sqlservercentral.com" in paragraph.text:
+        print(paragraph.text)
+    for i in range(LIMITE_ITERATIONS):
+        original_text = paragraph.text
+        markdownHeaderToWordStyle(paragraph)
+        transform_marker(paragraph, "==", setHighlight)
+        transform_marker(paragraph, "**", setBold)
+        transform_marker(paragraph, "__", setBold)
+        transform_marker(paragraph, "*", setItalic)
+        transform_marker(paragraph, "_", setItalic)
+        transform_marker(paragraph, "~~", setStrike)
+        transform_marker(paragraph, "`", setCode)
+        
+        transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
+        transform_regex(paragraph, r"(<span\s+style=\"color: )(.*?>.*?)(</span>)", (delCar, setColor, delCar))
 
-    #bookmarks [#bookmark]
-    lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
-    transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))
-    # markdown hyper link in the format [text to display](link)
-    transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
-    # markdown image hyper link to incorporate in the format ![alt text to display](link)
-    transform_regex(paragraph, r"(\!\[)([^\]|^\n]+)(\]\()([^\)|^\n]+\.(?:png|jpg|jpeg|gif))(\))", (delCar, linkImageToImage, delCar, delCar, delCar))
-    # just make left hyperlinks clickable
-    #LAST IS footnotes BECAUSE THE PARAGRAPH IS MOVED
-    #inline footnotes ^[footnote text]
-    
-    lambda_foot = lambda para, run, match: setInlineFootnote(document, para, run, match)
-    transform_regex(paragraph, r"(\^\[)([^\]\n]*)(\])(?!\w)", (delCar, lambda_foot, delCar))
-    # footnotes insertion [^footnote id name]
-    lambda_declare_foot = lambda para, run, match: declareFootnote(document, para, run, match)
-    transform_regex(paragraph, r"(\[\^)([^\]\n]*)(\])(?!\w|:)", (delCar, lambda_declare_foot, delCar))
-    # footnotes text description [^footnote id name]: indented text with possibly many paragraphs
-    if state.startswith("inFootnoteDefinition:"):
-        if paragraph.text.strip() == "":
-            state = "normal"
+        #bookmarks [#bookmark]
+        lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
+        transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))
+        # markdown hyper link in the format [text to display](link)
+        transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
+        # markdown image hyper link to incorporate in the format ![alt text to display](link)
+        transform_regex(paragraph, r"(\!\[)([^\]|^\n]+)(\]\()([^\)|^\n]+\.(?:png|jpg|jpeg|gif))(\))", (delCar, linkImageToImage, delCar, delCar, delCar))
+        # just make left hyperlinks clickable
+        #LAST IS footnotes BECAUSE THE PARAGRAPH IS MOVED
+        #inline footnotes ^[footnote text]
+        
+        lambda_foot = lambda para, run, match: setInlineFootnote(document, para, run, match)
+        transform_regex(paragraph, r"(\^\[)([^\]\n]*)(\])(?!\w)", (delCar, lambda_foot, delCar))
+        # footnotes insertion [^footnote id name]
+        lambda_declare_foot = lambda para, run, match: declareFootnote(document, para, run, match)
+        transform_regex(paragraph, r"(\[\^)([^\]\n]*)(\])(?!\w|:)", (delCar, lambda_declare_foot, delCar))
+        # footnotes text description [^footnote id name]: indented text with possibly many paragraphs
+        if state.startswith("inFootnoteDefinition:"):
+            if paragraph.text.strip() == "":
+                state = "normal"
+            else:
+                footnote_id = state.split(":")[1]
+                footnote = footnotes[footnote_id]
+                pPr = paragraph._p.get_or_add_pPr()
+                rstyle = pPr.get_or_add_pStyle()
+                rstyle.val = 'FootnoteText'
+                paragraph.style = styles["footnote text"]
+                footnote._fn._insert_p(paragraph._p)
         else:
+            state = transform_regex(paragraph, r"^(\[\^)([^\]\n]*)(\]:)(?!\w)(.+(?:\n[ \t]+.+)*)", (delCar, delCar, delCar, defineFootnote))
+        # hyperlinks
+        if state.startswith("inFootnoteDefinition"):
             footnote_id = state.split(":")[1]
             footnote = footnotes[footnote_id]
-            pPr = paragraph._p.get_or_add_pPr()
-            rstyle = pPr.get_or_add_pStyle()
-            rstyle.val = 'FootnoteText'
-            paragraph.style = styles["footnote text"]
-            footnote._fn._insert_p(paragraph._p)
-    else:
-        state = transform_regex(paragraph, r"^(\[\^)([^\]\n]*)(\]:)(?!\w)(.+(?:\n[ \t]+.+)*)", (delCar, delCar, delCar, defineFootnote))
-    # hyperlinks
-    if state.startswith("inFootnoteDefinition"):
-        footnote_id = state.split(":")[1]
-        footnote = footnotes[footnote_id]
-        paragraph = Paragraph(paragraph._p, footnote)
-        lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
-        transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_sethyperlink_footnote,))
-    else:
-        transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
-    
+            paragraph = Paragraph(paragraph._p, footnote)
+            lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_sethyperlink_footnote,))
+        else:
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
+        if original_text == paragraph.text:
+            break
+        else:
+            continue
     return state
 
 def setHyperlink(paragraph, run, match, **kwargs):
@@ -457,7 +486,7 @@ def setHyperlink(paragraph, run, match, **kwargs):
         run.style = hyperlink_style
     else:
         run.font.color.rgb = RGBColor.from_string("0000FF")
-    deletedCars = len(run.text)
+    # link are not counted as deleted anymore // deletedCars = len(run.text)
     try:
         link_text = match.group(2)
         link_url = match.group(4)
@@ -480,7 +509,8 @@ def setHyperlink(paragraph, run, match, **kwargs):
     hyperlink.append(run.element)
     paragraph._p[index_in_paragraph:index_in_paragraph] = [hyperlink]
     # Delete this if using a template that has the hyperlink style in it
-    return deletedCars, True, "normal"
+     # link are not counted as deleted anymore //return 0, True, "normal"
+    return 0, False, "normal"
 
 def add_footnote(document):
     _footnotes_part = document._part.part_related_by(RT.FOOTNOTES)
@@ -512,9 +542,9 @@ def setInlineFootnote(document, paragraph, run, match):
     para.style = styles["footnote text"] # set footnote style
     para.add_run(str(match.group(2)))   # put match text inside the footnotes
     if gr is not None: # is link
-        h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.runs[-1], gr, text=str(match.group(2)), is_footnote=True, document=document)
+        h_deletedCars, h_deletedRun, h_state = setHyperlink(para, para.all_runs[-1], gr, text=str(match.group(2)), is_footnote=True, document=document)
 
-    para.runs[0].style = styles["footnote reference"] # set footnote id style
+    para.all_runs[0].style = styles["footnote reference"] # set footnote id style
     # footnotes reference
     add_footnote_reference(run, footnote._fn)
     
@@ -591,13 +621,17 @@ def setStrike(para, run, match):
     return 0, False, "normal"
 
 def setCode(para, run, match):
-    run.style = code_style
+    try:
+        run.style = code_style
+    except ValueError as e:
+        raise ValueError(f"Style for code is {code_style.name} and is of type PARAGRAPH WHERE A CHARACTER STYLE IS NEEDED") from e
+    
     return 0, False, "normal"
 
 def delCar(para, run, match):
     ret = len(run.text)
     run.text = ""
-    para._p.remove(run.element)
+    para.remove(run.element)
     return ret, True, "normal"
 
 def transform_marker(paragraph, marker, func,content_regex=None):
@@ -625,9 +659,9 @@ def transform_regex(paragraph, regex, funcs):
         start = min(pos)
         end = max(pos)
         while start < end:
-            paragraph.runs[end-1].text += paragraph.runs[end].text
-            paragraph.runs[end].text = ""
-            paragraph._p.remove(paragraph.runs[end]._r)
+            paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
+            paragraph.all_runs[end].text = ""
+            paragraph.remove(paragraph.all_runs[end]._element)
             end -= 1
         # find marker position in run and split
         runs = getRunsIndexFromPositions(paragraph, positions)
@@ -637,14 +671,14 @@ def transform_regex(paragraph, regex, funcs):
                 prev = [None, 0] # force split
                 continue
             # Split runs if needed
-            run = paragraph.runs[run_pos[0]]
+            run = paragraph.all_runs[run_pos[0]]
             split_run_in_two(paragraph, run, run_pos[1])
             prev = run_pos
         runs = getRunsIndexFromPositions(paragraph, core_pos)
         # apply transformation func on all runs found
         deleted_runs = 0
         for i, func in enumerate(funcs):
-            run = paragraph.runs[runs[i][0] - deleted_runs]
+            run = paragraph.all_runs[runs[i][0] - deleted_runs]
             deleted_count, deleted_run, state = func(paragraph, run, match)
             deleted_runs += 1 if deleted_run else 0
             deletedCars += deleted_count
@@ -689,7 +723,7 @@ def getRunsIndexFromPositions(paragraph, positions):
     countedLetters = 0
     prevCountedLetters = 0
     ret = [None] * len(positions)
-    for i, run in enumerate(paragraph.runs):
+    for i, run in enumerate(paragraph.all_runs):
         prevCountedLetters = countedLetters
         countedLetters += len(run.text)
         for j, pos in enumerate(positions):
@@ -712,12 +746,13 @@ def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
     while len(cell.paragraphs) > 0:
         delete_paragraph(cell.paragraphs[0])
     p = cell.add_paragraph(text)
+    p = Paragraph(p._element, cell) # pylint: disable=protected-access
     p.style = styles["Cell"]
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    if p.runs:
-        p.runs[0].bold = bold
+    if p.all_runs:
+        p.all_runs[0].bold = bold
         if font_color is not None:
-            p.runs[0].font.color.rgb = font_color
+            p.all_runs[0].font.color.rgb = font_color
     if bg_color is not None:
         shading_elm_1 = parse_xml((r'<w:shd {} w:fill="'+bg_color+r'"/>').format(nsdecls('w')))
         cell._tc.get_or_add_tcPr().append(shading_elm_1)  # pylint: disable=protected-access
@@ -814,7 +849,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("to_debug.docx", "examples/out_document.docx", {"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
