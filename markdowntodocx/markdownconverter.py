@@ -8,6 +8,7 @@ import random
 from docx.shared import Cm
 from docx.enum.table import WD_ALIGN_VERTICAL # pylint: disable=no-name-in-module
 from docx.enum.text import WD_BREAK, WD_COLOR_INDEX
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.parser import OxmlElement
 from docx.exceptions import InvalidXmlError
 from docx.oxml.ns import nsdecls
@@ -117,7 +118,7 @@ class CT_Footnote(BaseOxmlElement):
     
     @property
     def paragraph(self):
-        return Paragraph(self.p, self)
+        return DocxParagraph(self.p, self)
     
 class CT_FNR(BaseOxmlElement):
     _id = RequiredAttribute('w:id', ST_DecimalNumber)
@@ -159,7 +160,7 @@ docx.oxml.register_element_cls('w:footnoteRef', CT_FootnoteRef)
 PartFactory.part_type_for[CT.WML_FOOTNOTES] = FootnotesPart
 ##### END OF FOOTNOTES CODE ####
 #### EXTEND PARAGRAPH TO BE ABLE TO READ HYPERLINKS ####
-class Paragraph(docx.text.paragraph.Paragraph):
+class DocxParagraph(docx.text.paragraph.Paragraph):
     def __init__(self, *args, **kwargs):
         super().__init__( *args, **kwargs)
     
@@ -262,10 +263,15 @@ def convertMarkdownInFile(infile, outfile, styles_names=None):
     return True, outfile
     
 def markdownToWordInDocument(document):
-    ps = getParagraphs(document)
+    ps = [ps for ps in getParagraphs(document)]
     state = "normal"
-    for paragraph in ps:
-        state = markdownToWordInParagraph(document, paragraph, state)
+    paragraph_i = 0
+    while paragraph_i < len(ps):
+        paragraph = ps[paragraph_i]
+        state, deleted_count = markdownToWordInParagraph(document, paragraph, state)
+        if deleted_count > 0:
+            paragraph_i += deleted_count
+        paragraph_i += 1
     ps = getParagraphs(document)
     for paragraph in ps:
         state = markdownToWordInParagraphCar(document, paragraph, state)
@@ -285,7 +291,7 @@ def getParagraphs(document):
     body = document._body._body # pylint: disable=protected-access
     ps = body.xpath('//w:p')
     for p in ps:
-        yield Paragraph(p, document._body) # pylint: disable=protected-access
+        yield DocxParagraph(p, document._body) # pylint: disable=protected-access
 
 def split_run_in_two(paragraph, run, split_index):
     index_in_paragraph = paragraph.index(run.element) # pylint: disable=protected-access
@@ -320,14 +326,45 @@ def copy_format_manual(runA, runB):
         pass
     fontB.color.rgb = fontA.color.rgb
 
+def get_next_paragraph(paragraph):
+    try:
+        return DocxParagraph(paragraph._p.getnext(), paragraph._parent) # pylint: disable=protected-access
+    except AttributeError:
+        return None
+
 
 def markdownArrayToWordList(document, paragraph, state):
+    if paragraph.text.strip() == "":
+        return state, 0
     table_line_regex = re.compile(r"^\s*(?:\|[^|\n]*)*$", re.MULTILINE)
-    matched = re.findall(table_line_regex, paragraph.text)
+    next_para = get_next_paragraph(paragraph)
+    matched = []
+    matched_para = []
+    matched_line = re.findall(table_line_regex, paragraph.text)
+    if matched_line:
+        matched_para.append(paragraph)
+    while matched_line:
+        matched.extend(matched_line)
+        if next_para is None:
+            break
+        matched_line = re.findall(table_line_regex, next_para.text)
+        if matched_line:
+            matched_para.append(next_para)
+        next_para = get_next_paragraph(next_para)
+        
+        if next_para is None or next_para.text.strip() == "":
+            if matched_line:
+                matched.extend(matched_line)
+            break
     if len(matched) == 0:
-        return state
+        return state, 0
+    
     nb_columns = len([x.strip() for x in matched[0].strip().split("|") if x.strip() != ""])
-    array = document.add_table(rows=len(matched), cols=nb_columns)
+    if nb_columns < 1 or len(matched) < 3:
+        return state, 0
+    
+    array = document.add_table(rows=len(matched) - 1, cols=nb_columns) # remove header/body line separator
+    horizontal_alignment = [None] * nb_columns
     for i_row, match in enumerate(matched):
         line = match.strip()
         columns = [x.strip() for x in line.split("|") if x.strip() != ""]
@@ -337,11 +374,21 @@ def markdownArrayToWordList(document, paragraph, state):
         for i_column, column in enumerate(columns):
             if i_column >= nb_columns:
                 break
-            cell = array.cell(i_row, i_column)
-            fill_cell(document, cell, column)
+            if i_row == 1:
+                if column.strip().startswith(":") and not column.strip().endswith(":"):
+                    horizontal_alignment[i_column] = WD_ALIGN_PARAGRAPH.LEFT
+                elif not column.strip().startswith(":") and column.strip().endswith(":"):
+                    horizontal_alignment[i_column] = WD_ALIGN_PARAGRAPH.RIGHT
+                elif column.strip().startswith(":") and column.strip().endswith(":"):
+                    horizontal_alignment[i_column] = WD_ALIGN_PARAGRAPH.CENTER
+            else:
+                cell = array.cell(0 if i_row == 0 else i_row-1, i_column)
+                fill_cell(document, cell, column, horizontal_align=horizontal_alignment[i_column])
     move_table_after(array, paragraph)
-    delete_paragraph(paragraph)
-    return state
+    for para in matched_para:
+        delete_paragraph(para)
+    #delete_paragraph(paragraph)
+    return state, len(matched_para)
 
 def markdownUnorderedListToWordList(paragraph, style, state):
     regex = re.compile(r"^\s*[\*|\-|\+]\s([^\n]+)", re.MULTILINE)
@@ -385,10 +432,11 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
     return state
 
 def markdownToWordInParagraph(document, paragraph, state):
-    state = markdownArrayToWordList(document, paragraph, state)
+    deleted_count = 0
+    state, deleted_count = markdownArrayToWordList(document, paragraph, state)
     state = markdownUnorderedListToWordList(paragraph, styles[default_styles_names.get("BulletList","BulletList")], state)
     state = mardownCodeBlockToWordStyle(paragraph, styles.get(default_styles_names.get("Code","Code"), "Macro Text"), state)
-    return state
+    return state, deleted_count
 
 def setColor(paragraph, run, match):
     # match.group(0) is <color:RGB>text</color> 
@@ -469,7 +517,7 @@ def markdownToWordInParagraphCar(document, paragraph, state):
         if state.startswith("inFootnoteDefinition"):
             footnote_id = state.split(":")[1]
             footnote = footnotes[footnote_id]
-            paragraph = Paragraph(paragraph._p, footnote)
+            paragraph = DocxParagraph(paragraph._p, footnote)
             lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
             transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_sethyperlink_footnote,))
         else:
@@ -538,7 +586,7 @@ def setInlineFootnote(document, paragraph, run, match):
     footnote = add_footnote(document) # create the footnote section for the document (empty)
     gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
     _p = footnote._fn._add_p(" ") # create a paragraph with a run containing a space to separate the footnote id from the text
-    para = Paragraph(_p, footnote)
+    para = DocxParagraph(_p, footnote)
     para.style = styles["footnote text"] # set footnote style
     para.add_run(str(match.group(2)))   # put match text inside the footnotes
     if gr is not None: # is link
@@ -697,7 +745,8 @@ def markdownHeaderToWordStyle(paragraph):
         
 
 def getRunsIndexFromPositions(paragraph, positions):
-    """returns a list of tuples (runIndex, positionInRun) for each caracter position in the list positions
+    r"""
+    Returns a list of tuples (runIndex, positionInRun) for each caracter position in the list positions
     example:
         paragraph.text is "This is an *example* of a paragraph"
         runs look like this:
@@ -731,7 +780,7 @@ def getRunsIndexFromPositions(paragraph, positions):
                 ret[j] = (i,pos-prevCountedLetters)
     return ret
 
-def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
+def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False, horizontal_align=None):
     """
     Fill a table's cell's background with a background color, a text and a font_color for this text
     Also sets the vertical alignement of every cell as centered.
@@ -746,9 +795,10 @@ def fill_cell(document, cell, text, font_color=None, bg_color=None, bold=False):
     while len(cell.paragraphs) > 0:
         delete_paragraph(cell.paragraphs[0])
     p = cell.add_paragraph(text)
-    p = Paragraph(p._element, cell) # pylint: disable=protected-access
+    p = DocxParagraph(p._element, cell) # pylint: disable=protected-access
     p.style = styles["Cell"]
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p.alignment = horizontal_align
     if p.all_runs:
         p.all_runs[0].bold = bold
         if font_color is not None:
@@ -803,7 +853,7 @@ def getParagraphs(document):
     body = document._body._body # pylint: disable=protected-access
     ps = body.xpath('//w:p')
     for p in ps:
-        yield Paragraph(p, document._body) # pylint: disable=protected-access
+        yield DocxParagraph(p, document._body) # pylint: disable=protected-access
 
 
 def set_hyperlink(paragraph, run, url, text, style):
@@ -840,7 +890,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
     """
     new_p = OxmlElement("w:p")
     paragraph._p.addnext(new_p)  # pylint: disable=protected-access
-    new_para = Paragraph(new_p, paragraph._parent)  # pylint: disable=protected-access
+    new_para = DocxParagraph(new_p, paragraph._parent)  # pylint: disable=protected-access
     if text is not None:
         new_para.add_run(text)
     if style is not None:
