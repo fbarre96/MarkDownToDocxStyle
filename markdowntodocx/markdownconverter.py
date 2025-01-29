@@ -322,15 +322,15 @@ def copy_format_manual(runA, runB):
 
 
 def markdownArrayToWordList(document, paragraph, state):
-    table_line_regex = re.compile(r"^\|(?:[^|\n]*[^-|\n][^|\n]*\|)*\s*$", re.MULTILINE)
+    table_line_regex = re.compile(r"^\s*(?:\|[^|\n]*)*$", re.MULTILINE)
     matched = re.findall(table_line_regex, paragraph.text)
     if len(matched) == 0:
         return state
-    nb_columns = len(matched[0].strip()[1:-1].split("|"))
+    nb_columns = len([x.strip() for x in matched[0].strip().split("|") if x.strip() != ""])
     array = document.add_table(rows=len(matched), cols=nb_columns)
     for i_row, match in enumerate(matched):
         line = match.strip()
-        columns = line[1:-1].split("|") # [1:-1] strip beginning and ending pipe
+        columns = [x.strip() for x in line.split("|") if x.strip() != ""]
         # if len(columns) != nb_columns:
         #     raise ValueError("The array with following headers : "+str(matched[0])+" is supposed to have "+str(nb_columns)+ \
         #                         " columns but the line "+str(line)+" has "+str(len(columns))+" columns")
