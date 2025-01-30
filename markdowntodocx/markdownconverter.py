@@ -336,7 +336,7 @@ def get_next_paragraph(paragraph):
 def markdownArrayToWordList(document, paragraph, state):
     if paragraph.text.strip() == "":
         return state, 0
-    table_line_regex = re.compile(r"^\s*(?:\|[^|\n]*)*$", re.MULTILINE)
+    table_line_regex = re.compile(r"^\s*(?:\|[^|\n]*)+$", re.MULTILINE)
     next_para = get_next_paragraph(paragraph)
     matched = []
     matched_para = []
