@@ -352,7 +352,7 @@ def markdownArrayToWordList(document, paragraph, state):
             matched_para.append(next_para)
         next_para = get_next_paragraph(next_para)
         
-        if next_para is None or next_para.text.strip() == "":
+        if next_para is None or next_para.text is None or next_para.text.strip() == "":
             if matched_line:
                 matched.extend(matched_line)
             break
@@ -899,7 +899,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/to_debug.docx", "examples/out_document.docx" ,{"Header":"Header"})
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
