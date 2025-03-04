@@ -226,6 +226,7 @@ default_styles_names = {
         "Header4": ("Heading 4", "Header"),
         "Header5": ("Heading 5", "Header"),
         "Header6": ("Heading 6", "Header"),
+        "Table": ("Table", "Table Grid"),
     }
 styles = {}
 code_style = None
