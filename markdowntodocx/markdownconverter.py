@@ -364,6 +364,10 @@ def markdownArrayToWordList(document, paragraph, state):
         return state, 0
     
     array = document.add_table(rows=len(matched) - 1, cols=nb_columns) # remove header/body line separator
+    try:
+        array.style = styles[default_styles_names.get("Table", None)]
+    except KeyError:
+        pass
     horizontal_alignment = [None] * nb_columns
     for i_row, match in enumerate(matched):
         line = match.strip()
