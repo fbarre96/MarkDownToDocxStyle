@@ -472,8 +472,6 @@ def setColor(paragraph, run, match):
 def markdownToWordInParagraphCar(document, paragraph, state):
     if paragraph.style.name == code_style.name or paragraph.style.name == "Code":
         return state
-    if "www.sqlservercentral.com" in paragraph.text:
-        print(paragraph.text)
     for i in range(LIMITE_ITERATIONS):
         original_text = paragraph.text
         markdownHeaderToWordStyle(paragraph)
@@ -534,6 +532,9 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     return state
 
 def setHyperlink(paragraph, run, match, **kwargs):
+    # Handle if already a link
+    if hasattr(run._parent,"tag") and run._parent.tag.endswith("hyperlink"):
+        return 0, False, "normal"
     run.font.underline = True
     if hyperlink_style is not None:
         run.style = hyperlink_style
@@ -707,15 +708,18 @@ def transform_regex(paragraph, regex, funcs):
         positions += core_pos # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
         runs = getRunsIndexFromPositions(paragraph, positions)
+        
         # merge non-contiuous run matched
-        pos = ([x[0] for x in runs if x is not None])
-        start = min(pos)
-        end = max(pos)
-        while start < end:
-            paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
-            paragraph.all_runs[end].text = ""
-            paragraph.remove(paragraph.all_runs[end]._element)
-            end -= 1
+        # Check if last run has at least one character to be merged. (the last pos is the end of the match
+        if runs and runs[-1] and runs[-1][1] != 0:
+            pos = ([x[0] for x in runs if x is not None])
+            start = min(pos)
+            end = max(pos)
+            while start < end:
+                paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
+                paragraph.all_runs[end].text = ""
+                paragraph.remove(paragraph.all_runs[end]._element)
+                end -= 1
         # find marker position in run and split
         runs = getRunsIndexFromPositions(paragraph, positions)
         prev = None
@@ -725,7 +729,8 @@ def transform_regex(paragraph, regex, funcs):
                 continue
             # Split runs if needed
             run = paragraph.all_runs[run_pos[0]]
-            split_run_in_two(paragraph, run, run_pos[1])
+            if run_pos[1] != 0: # if not at the beginning of the run
+                split_run_in_two(paragraph, run, run_pos[1])
             prev = run_pos
         runs = getRunsIndexFromPositions(paragraph, core_pos)
         # apply transformation func on all runs found
@@ -904,7 +909,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/to_debug.docx", "examples/out_document.docx" ,{"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
