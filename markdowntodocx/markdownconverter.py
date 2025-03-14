@@ -535,6 +535,8 @@ def setHyperlink(paragraph, run, match, **kwargs):
     # Handle if already a link
     if hasattr(run._parent,"tag") and run._parent.tag.endswith("hyperlink"):
         return 0, False, "normal"
+    if run.style.style_id == code_style.style_id:
+        return 0, False, "normal"
     run.font.underline = True
     if hyperlink_style is not None:
         run.style = hyperlink_style
