@@ -702,8 +702,9 @@ def transform_marker(paragraph, marker, func,content_regex=None):
 def transform_regex(paragraph, regex, funcs):
     deletedCars = 0
     state = "normal"
+    regex = re.compile(regex, re.MULTILINE)
     # find every iteration of marker+content+marker in paragraph
-    for match in re.finditer(regex, paragraph.text, re.MULTILINE):
+    for match in regex.finditer(paragraph.text):
         # get starting marker run index and ending marker run index
         positions = []
         core_pos = [x[0]-deletedCars for x in match.regs[1:]]
@@ -713,15 +714,14 @@ def transform_regex(paragraph, regex, funcs):
         
         # merge non-contiuous run matched
         # Check if last run has at least one character to be merged. (the last pos is the end of the match
-        if runs and runs[-1] and runs[-1][1] != 0:
-            pos = ([x[0] for x in runs if x is not None])
-            start = min(pos)
-            end = max(pos)
-            while start < end:
-                paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
-                paragraph.all_runs[end].text = ""
-                paragraph.remove(paragraph.all_runs[end]._element)
-                end -= 1
+        pos = ([x[0] for x in runs if x is not None])
+        start = min(pos)
+        end = max(pos)
+        while start < end:
+            paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
+            paragraph.all_runs[end].text = ""
+            paragraph.remove(paragraph.all_runs[end]._element)
+            end -= 1
         # find marker position in run and split
         runs = getRunsIndexFromPositions(paragraph, positions)
         prev = None
@@ -911,7 +911,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/test.docx", "examples/out_document.docx" ,{"Header":"Header"})
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
