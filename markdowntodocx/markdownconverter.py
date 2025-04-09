@@ -28,7 +28,9 @@ from docx.oxml.xmlchemy import (
     BaseOxmlElement, RequiredAttribute, ZeroOrMore, ZeroOrOne
 )
 from docx.shared import Parented
+
 LIMITE_ITERATIONS=10
+
 class Footnote(Parented):
     def __init__(self, f, parent):
         super().__init__(parent)
@@ -652,7 +654,15 @@ def setBookmark(document, paragraph, run, match):
 
 def linkImageToImage(para, run, match):
     link_url = match.group(4)
-    data = downloadImgData(link_url)
+    if link_url.strip().startswith("file://"):
+        path = link_url.strip()[7:]
+        try:
+            with open(path, "rb") as f:
+                data = io.BytesIO(f.read())
+        except Exception:
+            data = None
+    else:
+        data = downloadImgData(link_url)
     if data is not None:
         text_len = len(run.text)
         run.text = ""

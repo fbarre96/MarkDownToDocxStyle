@@ -49,8 +49,11 @@ my code
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
     * E.g : `markdownToWordInFile("/mypath/to/document.docx", "output_path.docx", {"Code":"my_block_code_style"})`
 
-* Insert Image ``![Image name](http://link.do.web/myimage.png)``:
+* Insert Remote Image ``![Image name](http://link.do.web/myimage.png)``:
     * It will download the image from the hyperlink and insert the picture with a width of 18cm
+
+* Insert Local Image ``![image name](file:///home/myuser/images/test.png)``
+    * It will read images extensioned file and insert them as remote images
 
 * Hyperlink `` [google](https://www.google.fr)  `` : Makes it a Word hyperlink [google](https://www.google.fr)
     * Will also attempt to convert any valid http hyperlink to word : `http://www.google.fr` -> http://www.google.fr
