@@ -659,7 +659,8 @@ def linkImageToImage(para, run, match):
         try:
             with open(path, "rb") as f:
                 data = io.BytesIO(f.read())
-        except Exception:
+        except Exception as e:
+            print("Error opening file: ", e)
             data = None
     else:
         data = downloadImgData(link_url)
@@ -921,7 +922,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/test.docx", "examples/out_document.docx" ,{"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
