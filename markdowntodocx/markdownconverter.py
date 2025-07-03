@@ -466,7 +466,11 @@ def setColor(paragraph, run, match):
         except ValueError:
             pass
     else:
-        run.font.color.rgb = RGBColor.from_string(splitted[0])
+        color_string = splitted[0]
+        color_string = color_string.strip().replace("#", "")
+        if len(color_string) != 6:
+            raise ValueError("RGB hex string must be exactly 6 characters long")
+        run.font.color.rgb = RGBColor.from_string(color_string)
     initial_len = len(run.text)
     run.text = ">".join(splitted[1:])
     return initial_len-len(run.text), False, "normal"
