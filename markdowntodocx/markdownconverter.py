@@ -427,6 +427,8 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
         state = "code_block"
         text_bits = paragraph.text.split("```")
         paragraph.text = text_bits[0].strip()
+        if paragraph.text.strip() == "": # don't insert empty paragraph if code block is not started on the same paragraph
+            delete_paragraph(paragraph)
         start_code_block = "```".join(text_bits[1:])
         if start_code_block.strip() == "": # don't insert empty paragraph if code block is not started on the same paragraph
             return state
