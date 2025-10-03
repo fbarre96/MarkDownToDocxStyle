@@ -49,6 +49,11 @@ my code
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
     * E.g : `markdownToWordInFile("/mypath/to/document.docx", "output_path.docx", {"Code":"my_block_code_style"})`
 
+* Mermaid support ``` ` ` `mermaid ... ` ` ` ``` (see mermaid https://mermaid.js.org).
+    * __CAUTION__ : By default, mermaid graph are generated using https://mermaid.ink/img. You can install a mermaid.ink server locally with https://github.com/jihchi/mermaid.ink and then specify the mermaid server when running the markdown converter 
+    * E.g : `markdownToWordInFile("/mypath/to/document.docx", "output_path.docx", mermaid_server_link="https://localhost:3000/img/")`
+
+
 * Insert Remote Image ``![Image name](http://link.do.web/myimage.png)``:
     * It will download the image from the hyperlink and insert the picture with a width of 18cm
 
