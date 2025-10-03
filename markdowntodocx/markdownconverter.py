@@ -1,3 +1,4 @@
+import base64
 import re
 import io
 import requests
@@ -420,6 +421,35 @@ def markdownUnorderedListToWordList(paragraph, style, state):
             delete_paragraph(paragraph)
     return state
 
+def markdownMermaidToImage(document, paragraph, state):
+    if state == "normal" and "```mermaid" in paragraph.text:
+        graph = ""
+        deleted_count = 0
+        paragraph.text = paragraph.text.replace("```mermaid","").strip()
+        while "```" not in paragraph.text:
+            graph += paragraph.text + "\n"
+            next_para = get_next_paragraph(paragraph)
+            delete_paragraph(paragraph)
+            deleted_count += 1
+            if next_para is None:
+                break
+            paragraph = next_para
+        if paragraph is not None and "```" in paragraph.text:
+            graph += paragraph.text.replace("```","").strip()
+            paragraph.text = ""
+        if graph.strip() != "":
+            graphbytes = graph.encode("utf8")
+            base64_bytes = base64.urlsafe_b64encode(graphbytes)
+            base64_string = base64_bytes.decode("ascii")
+            link = "https://mermaid.ink/img/"+base64_string
+            img_data = downloadImgData(link)
+            if img_data is not None:
+                r = paragraph.add_run()
+                r.add_picture(img_data, width=Cm(17.19))
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        return "normal", deleted_count
+    return state, 0
+
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
     if state == "code_block":
         paragraph.style = code_style
@@ -451,8 +481,10 @@ def markdownToWordInParagraph(document, paragraph, state):
     deleted_count = 0
     state, deleted_count = markdownArrayToWordList(document, paragraph, state)
     state = markdownUnorderedListToWordList(paragraph, styles[default_styles_names.get("BulletList","BulletList")], state)
+    
+    state, deleted_count_2 = markdownMermaidToImage(document, paragraph, state)
     state = mardownCodeBlockToWordStyle(paragraph, styles.get(default_styles_names.get("Code","Code"), "Macro Text"), state)
-    return state, deleted_count
+    return state, deleted_count + deleted_count_2
 
 def setColor(paragraph, run, match):
     # match.group(0) is <color:RGB>text</color> 
