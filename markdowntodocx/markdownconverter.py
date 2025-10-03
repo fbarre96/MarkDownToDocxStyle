@@ -234,10 +234,16 @@ default_styles_names = {
 styles = {}
 code_style = None
 hyperlink_style = None
+mermaid_server = None
 
-def convertMarkdownInFile(infile, outfile, styles_names=None):
+def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None):
     global default_styles_names
     global styles
+    global mermaid_server
+    if mermaid_server_link is not None:
+        mermaid_server = mermaid_server_link
+    else:
+        mermaid_server = "https://mermaid.ink/img/"
     if styles_names:
         for key, val in styles_names.items():
             default_styles_names[key] = val
@@ -441,7 +447,7 @@ def markdownMermaidToImage(document, paragraph, state):
             graphbytes = graph.encode("utf8")
             base64_bytes = base64.urlsafe_b64encode(graphbytes)
             base64_string = base64_bytes.decode("ascii")
-            link = "https://mermaid.ink/img/"+base64_string
+            link = mermaid_server+base64_string
             img_data = downloadImgData(link)
             if img_data is not None:
                 r = paragraph.add_run()
