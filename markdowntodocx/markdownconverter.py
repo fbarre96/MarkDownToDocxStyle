@@ -1,6 +1,8 @@
 import base64
+import os
 import re
 import io
+import tempfile
 import requests
 import docx
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -29,6 +31,8 @@ from docx.oxml.xmlchemy import (
     BaseOxmlElement, RequiredAttribute, ZeroOrMore, ZeroOrOne
 )
 from docx.shared import Parented
+import subprocess
+
 
 LIMITE_ITERATIONS=10
 
@@ -236,11 +240,13 @@ code_style = None
 hyperlink_style = None
 mermaid_server = None
 
-def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None):
+def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None, mermaid_cli=None):
     global default_styles_names
     global styles
     global mermaid_server
-    if mermaid_server_link is not None:
+    if mermaid_cli is not None:
+        mermaid_server = "exec://"+mermaid_cli
+    elif mermaid_server_link is not None:
         mermaid_server = mermaid_server_link
     else:
         mermaid_server = "https://mermaid.ink/img/"
@@ -444,11 +450,23 @@ def markdownMermaidToImage(document, paragraph, state):
             graph += paragraph.text.replace("```","").strip()
             paragraph.text = ""
         if graph.strip() != "":
-            graphbytes = graph.encode("utf8")
-            base64_bytes = base64.urlsafe_b64encode(graphbytes)
-            base64_string = base64_bytes.decode("ascii")
-            link = mermaid_server+base64_string
-            img_data = downloadImgData(link)
+            if mermaid_server.startswith("exec://"):
+                img_data = None
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mmd", mode="w", encoding="utf8") as f:
+                    f.write(graph)
+                    graph_file = f.name
+                    mermaid_cli = mermaid_server.replace("exec://","").strip()
+                    cmd = mermaid_cli + "-i "+graph_file+" -o "+os.path.splitext(graph_file)[0]+".png"
+                    f.close()
+                    stdout,stderr = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate(input=graph.encode("utf8"))
+                    os.remove(graph_file)
+                    img_data = open(os.path.splitext(graph_file)[0]+".png", "rb").read()
+            else:
+                graphbytes = graph.encode("utf8")
+                base64_bytes = base64.urlsafe_b64encode(graphbytes)
+                base64_string = base64_bytes.decode("ascii")
+                link = mermaid_server+base64_string
+                img_data = downloadImgData(link)
             if img_data is not None:
                 r = paragraph.add_run()
                 r.add_picture(img_data, width=Cm(17.19))

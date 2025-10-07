@@ -10,7 +10,7 @@ README = (HERE / "README.md").read_text()
 setup(
     name='markdowntodocx',
     packages=find_packages(include=['markdowntodocx']),
-    version='0.1.7.1',
+    version='0.1.7.2',
     url="https://github.com/fbarre96/MarkDownToDocxStyle",
     description='Convert markdown inside Docx to docx styles',
     long_description=README,
