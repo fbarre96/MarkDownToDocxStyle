@@ -458,9 +458,11 @@ def markdownMermaidToImage(document, paragraph, state):
                     mermaid_cli = mermaid_server.replace("exec://","").strip()
                     cmd = mermaid_cli + " -i "+graph_file+" -o "+os.path.splitext(graph_file)[0]+".png"
                     f.close()
-                    stdout,stderr = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate(input=graph.encode("utf8"))
+                    result = subprocess.run(cmd, shell=True, text=True)
+                    if result.returncode != 0:
+                        raise ValueError("Error executing mermaid CLI: "+str(result.returncode) + ":"+ str(result.stderr))
                     os.remove(graph_file)
-                    img_data = open(os.path.splitext(graph_file)[0]+".png", "rb").read()
+                    img_data = io.BytesIO(open(os.path.splitext(graph_file)[0]+".png", "rb").read())
             else:
                 graphbytes = graph.encode("utf8")
                 base64_bytes = base64.urlsafe_b64encode(graphbytes)
