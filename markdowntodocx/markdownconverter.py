@@ -456,7 +456,7 @@ def markdownMermaidToImage(document, paragraph, state):
                     f.write(graph)
                     graph_file = f.name
                     mermaid_cli = mermaid_server.replace("exec://","").strip()
-                    cmd = mermaid_cli + "-i "+graph_file+" -o "+os.path.splitext(graph_file)[0]+".png"
+                    cmd = mermaid_cli + " -i "+graph_file+" -o "+os.path.splitext(graph_file)[0]+".png"
                     f.close()
                     stdout,stderr = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate(input=graph.encode("utf8"))
                     os.remove(graph_file)
