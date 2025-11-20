@@ -772,7 +772,7 @@ def delCar(para, run, match):
     para.remove(run.element)
     return ret, True, "normal"
 
-def transform_marker(paragraph, marker, func,content_regex=None):
+def transform_marker(paragraph, marker, func, content_regex=None):
     if content_regex is None:
         content_regex = r"[^"+re.escape(marker[0])+r"\n]*"
     marker = re.escape(marker)
@@ -793,37 +793,32 @@ def transform_regex(paragraph, regex, funcs):
         positions += core_pos # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
         runs = getRunsIndexFromPositions(paragraph, positions)
-        
-        # merge non-contiuous run matched
-        # Check if last run has at least one character to be merged. (the last pos is the end of the match
-        pos = ([x[0] for x in runs if x is not None])
-        start = min(pos)
-        end = max(pos)
-        while start < end:
-            paragraph.all_runs[end-1].text += paragraph.all_runs[end].text
-            paragraph.all_runs[end].text = ""
-            paragraph.remove(paragraph.all_runs[end]._element)
-            end -= 1
-        # find marker position in run and split
-        runs = getRunsIndexFromPositions(paragraph, positions)
-        prev = None
+        # find marker position in run and split (if needed) runs to have markers isolated in their own runs
         for run_pos in runs[::-1]:
             if run_pos is None:
-                prev = [None, 0] # force split
                 continue
-            # Split runs if needed
+            # Split runs if regex matched in the middle of a run
             run = paragraph.all_runs[run_pos[0]]
             if run_pos[1] != 0: # if not at the beginning of the run
                 split_run_in_two(paragraph, run, run_pos[1])
-            prev = run_pos
-        runs = getRunsIndexFromPositions(paragraph, core_pos)
+
+        runs_delimiters = [x[0] for x in getRunsIndexFromPositions(paragraph, core_pos) if x is not None] # recalculate runs index after splits
         # apply transformation func on all runs found
-        deleted_runs = 0
-        for i, func in enumerate(funcs):
-            run = paragraph.all_runs[runs[i][0] - deleted_runs]
+        index_min_run = min(runs_delimiters) # run index of first marker matched
+        index_max_run = max(runs_delimiters) # run index of last marker matched
+        runs_iterator = index_min_run
+        initial_run_counter = runs_iterator
+        current_core_pos = 0
+        while initial_run_counter <= index_max_run:
+            run = paragraph.all_runs[runs_iterator]
+            func = funcs[current_core_pos]
             deleted_count, deleted_run, state = func(paragraph, run, match)
-            deleted_runs += 1 if deleted_run else 0
+            if deleted_run:
+                runs_iterator -= 1
+            runs_iterator += 1
+            initial_run_counter += 1
             deletedCars += deleted_count
+            current_core_pos = runs_delimiters.index(initial_run_counter) if initial_run_counter in runs_delimiters else current_core_pos
     return state
 
 def markdownHeaderToWordStyle(paragraph):
