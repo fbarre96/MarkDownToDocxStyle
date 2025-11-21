@@ -719,9 +719,9 @@ def markdownToWordInParagraphCar(document, paragraph, state):
             footnote = footnotes[footnote_id]
             paragraph = DocxParagraph(paragraph._p, footnote)
             lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (lambda_sethyperlink_footnote,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", (lambda_sethyperlink_footnote,))
         else:
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", (setHyperlink,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", (setHyperlink,))
         if original_text == paragraph.text:
             break
         else:
@@ -789,7 +789,7 @@ def setInlineFootnote(document, paragraph, run, match):
     run.text= "" # Run text is removed to be placed inside the footnote paragraph
     #footnotes
     footnote = add_footnote(document) # create the footnote section for the document (empty)
-    gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+.~#?&//=]))", match.group(2))
+    gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", match.group(2))
     _p = footnote._fn._add_p(" ") # create a paragraph with a run containing a space to separate the footnote id from the text
     para = DocxParagraph(_p, footnote)
     para.style = styles["footnote text"] # set footnote style
