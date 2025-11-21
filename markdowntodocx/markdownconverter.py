@@ -5,6 +5,10 @@ import io
 import tempfile
 import requests
 import docx
+from pygments import highlight
+from pygments.lexers import guess_lexer, guess_lexer_for_filename, get_lexer_by_name
+from pygments.formatters.rtf import RtfFormatter
+from pygments.util import ClassNotFound
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.opc.constants import CONTENT_TYPE as CT
 import random
@@ -476,11 +480,120 @@ def markdownMermaidToImage(document, paragraph, state):
         return "normal", deleted_count
     return state, 0
 
+def apply_syntax_highlighting(paragraph, code_text, lexer, code_style):
+    """Apply syntax highlighting to code text using Pygments."""
+    from pygments.token import Token
+    
+    # Color mapping for different token types
+    color_map = {
+        Token.Keyword: RGBColor(0xAC,0x7C, 0x8A),       # pink for keywords
+        Token.Keyword.Constant: RGBColor(0, 0, 255),   # Blue for constants
+        Token.Keyword.Declaration: RGBColor(0, 0, 255), # Blue for declarations
+        Token.Keyword.Namespace: RGBColor(0, 0, 255),   # Blue for namespace
+        Token.Keyword.Pseudo: RGBColor(0, 0, 255),      # Blue for pseudo keywords
+        Token.Keyword.Reserved: RGBColor(0, 0, 255),    # Blue for reserved words
+        Token.Keyword.Type: RGBColor(43, 145, 175),     # Teal for types
+        
+        Token.String: RGBColor(163, 21, 21),           # Dark red for strings
+        Token.String.Char: RGBColor(163, 21, 21),      # Dark red for chars
+        Token.String.Doc: RGBColor(163, 21, 21),       # Dark red for doc strings
+        Token.String.Double: RGBColor(163, 21, 21),    # Dark red for double quoted
+        Token.String.Single: RGBColor(163, 21, 21),    # Dark red for single quoted
+        Token.String.Heredoc: RGBColor(163, 21, 21),   # Dark red for heredoc
+        Token.String.Interpol: RGBColor(163, 21, 21),  # Dark red for interpolated
+        Token.String.Regex: RGBColor(163, 21, 21),     # Dark red for regex
+        
+        Token.Comment: RGBColor(0, 128, 0),            # Green for comments
+        Token.Comment.Single: RGBColor(0, 128, 0),     # Green for single line comments
+        Token.Comment.Multiline: RGBColor(0, 128, 0),  # Green for multi-line comments
+        Token.Comment.Preproc: RGBColor(0, 128, 0),    # Green for preprocessor comments
+        
+        Token.Number: RGBColor(181, 137, 0),           # Orange for numbers
+        Token.Number.Integer: RGBColor(181, 137, 0),   # Orange for integers
+        Token.Number.Float: RGBColor(181, 137, 0),     # Orange for floats
+        Token.Number.Hex: RGBColor(181, 137, 0),       # Orange for hex numbers
+        Token.Number.Oct: RGBColor(181, 137, 0),       # Orange for octal numbers
+        
+        Token.Operator: RGBColor(128, 128, 128),       # Gray for operators
+        Token.Operator.Word: RGBColor(0, 0, 255),      # Blue for word operators (and, or, etc.)
+        
+        Token.Name.Function: RGBColor(255, 127, 0),    # Orange for function names
+        Token.Name.Class: RGBColor(43, 145, 175),      # Teal for class names
+        Token.Name.Variable: RGBColor(0, 0, 0),        # Black for variables
+        Token.Name.Constant: RGBColor(128, 0, 128),    # Purple for constants
+        Token.Name.Decorator: RGBColor(128, 128, 0),   # Olive for decorators
+        Token.Name.Builtin: RGBColor(0, 0, 255),       # Blue for built-ins
+        
+        Token.Punctuation: RGBColor(0, 0, 0),          # Black for punctuation
+        Token.Text: RGBColor(0, 0, 0),                 # Black for regular text
+    }
+    
+    # Clear existing text
+    
+    if lexer is None:
+        return
+    paragraph.clear()
+    
+    # Tokenize the code
+    try:
+        tokens = list(lexer.get_tokens(code_text))
+        
+        for token_type, text in tokens:
+            if text.strip():  # Skip empty tokens
+                run = paragraph.add_run(text)
+                # Apply color based on token type
+                # Check for exact match first, then parent types
+                color = None
+                current_type = token_type
+                
+                while current_type and color is None:
+                    color = color_map.get(current_type)
+                    if color is None:
+                        # Try parent type
+                        parent = getattr(current_type, 'parent', None)
+                        if parent == current_type:  # Avoid infinite loop
+                            break
+                        current_type = parent
+                
+                if color:
+                    run.font.color.rgb = color
+                    
+            elif token_type is Token.Text.Whitespace and text != "\n":
+                paragraph.add_run(text)
+                
+                
+    except Exception as e:
+        # If syntax highlighting fails, fall back to plain text
+        run = paragraph.add_run(code_text)
+    paragraph.style = code_style
+
+# Global variable to store current lexer for code blocks
+current_code_lexer = None
+
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
+    global current_code_lexer
+    
     if state == "code_block":
         paragraph.style = code_style
+        # Apply syntax highlighting if we have a stored lexer
+        if current_code_lexer and paragraph.text.strip():
+            apply_syntax_highlighting(paragraph, paragraph.text, current_code_lexer, code_style)
+    
     if "```" in paragraph.text and state != "code_block":
+        lexer = None
+        try:
+            code_language = paragraph.text.replace("```","").strip().lower().split(" ")[0]
+            if code_language:  # Only try to get lexer if language is specified
+                lexer = get_lexer_by_name(code_language)
+        except IndexError:
+            lexer = None
+        except ClassNotFound:
+            lexer = None
+
+        # Store lexer for future use in code block
+        current_code_lexer = lexer
         state = "code_block"
+        
         text_bits = paragraph.text.split("```")
         paragraph.text = text_bits[0].strip()
         if paragraph.text.strip() == "": # don't insert empty paragraph if code block is not started on the same paragraph
@@ -488,18 +601,29 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
         start_code_block = "```".join(text_bits[1:])
         if start_code_block.strip() == "": # don't insert empty paragraph if code block is not started on the same paragraph
             return state
-        paragraph = insert_paragraph_after(paragraph, start_code_block, code_style)
+        new_paragraph = insert_paragraph_after(paragraph, start_code_block, code_style)
+        # Apply syntax highlighting to the new paragraph
+        if start_code_block.strip():
+            apply_syntax_highlighting(new_paragraph, start_code_block, current_code_lexer, code_style)
+        return state
     
     if "```" in paragraph.text and state == "code_block":
-        state = "normal"
         text_bits = paragraph.text.split("```")
-        paragraph.text = text_bits[0].strip()
-        if paragraph.text.strip() == "":
+        code_content = text_bits[0].strip()
+        
+        if code_content:
+            # Apply syntax highlighting to current paragraph before ending code block
+            apply_syntax_highlighting(paragraph, code_content, current_code_lexer, code_style)
+        else:
             delete_paragraph(paragraph)
+            
+        # Reset lexer and state
+        current_code_lexer = None
+        state = "normal"
+        
         remained = "```".join(text_bits[1:])
-        if remained.strip() == "": # don't insert empty paragpraph if code block is not ended on the same paragraph
-            return state
-        insert_paragraph_after(paragraph, remained)
+        if remained.strip() != "": # don't insert empty paragraph if code block is not ended on the same paragraph
+            insert_paragraph_after(paragraph, remained)
         
     return state
 
@@ -935,14 +1059,6 @@ def downloadImgData(url):
     data = data.content
     data = io.BytesIO(data)
     return data
-
-def getParagraphs(document):
-    """ Retourne un generateur pour tous les paragraphes du document.
-        La page d'entête n'étant pas incluse dans documents.paragraphs."""
-    body = document._body._body # pylint: disable=protected-access
-    ps = body.xpath('//w:p')
-    for p in ps:
-        yield DocxParagraph(p, document._body) # pylint: disable=protected-access
 
 
 def set_hyperlink(paragraph, run, url, text, style):
