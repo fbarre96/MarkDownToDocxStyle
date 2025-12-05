@@ -281,7 +281,7 @@ def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_lin
     markdownToWordInDocument(document)
     document.save(outfile)
     return True, outfile
-    
+
 def markdownToWordInDocument(document):
     ps = [ps for ps in getParagraphs(document)]
     state = "normal"
@@ -672,14 +672,8 @@ def markdownToWordInParagraphCar(document, paragraph, state):
     for i in range(LIMITE_ITERATIONS):
         original_text = paragraph.text
         markdownHeaderToWordStyle(paragraph)
-        transform_marker(paragraph, "==", setHighlight)
-        transform_marker(paragraph, "**", setBold)
-        transform_marker(paragraph, "__", setBold)
-        transform_marker(paragraph, "*", setItalic)
-        transform_marker(paragraph, "_", setItalic)
-        transform_marker(paragraph, "~~", setStrike)
+
         transform_marker(paragraph, "`", setCode)
-        
         transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
         transform_regex(paragraph, r"(<span\s+style=\"color: )(.*?>.*?)(</span>)", (delCar, setColor, delCar))
 
@@ -719,9 +713,16 @@ def markdownToWordInParagraphCar(document, paragraph, state):
             footnote = footnotes[footnote_id]
             paragraph = DocxParagraph(paragraph._p, footnote)
             lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", (lambda_sethyperlink_footnote,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (lambda_sethyperlink_footnote,))
         else:
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", (setHyperlink,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (setHyperlink,))
+        transform_marker(paragraph, "==", setHighlight)
+        transform_marker(paragraph, "**", setBold)
+        transform_marker(paragraph, "__", setBold)
+        transform_marker(paragraph, "*", setItalic)
+        transform_marker(paragraph, "_", setItalic)
+        transform_marker(paragraph, "~~", setStrike)
+        
         if original_text == paragraph.text:
             break
         else:
@@ -789,7 +790,7 @@ def setInlineFootnote(document, paragraph, run, match):
     run.text= "" # Run text is removed to be placed inside the footnote paragraph
     #footnotes
     footnote = add_footnote(document) # create the footnote section for the document (empty)
-    gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@:%_\+~#?&//=]))", match.group(2))
+    gr = re.search(r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", match.group(2))
     _p = footnote._fn._add_p(" ") # create a paragraph with a run containing a space to separate the footnote id from the text
     para = DocxParagraph(_p, footnote)
     para.style = styles["footnote text"] # set footnote style
@@ -886,6 +887,8 @@ def setCode(para, run, match):
     try:
         run.style = code_style
     except ValueError as e:
+        raise ValueError(f"Style for code is {code_style.name} and is of type PARAGRAPH WHERE A CHARACTER STYLE IS NEEDED") from e
+    except AttributeError as e:
         raise ValueError(f"Style for code is {code_style.name} and is of type PARAGRAPH WHERE A CHARACTER STYLE IS NEEDED") from e
     
     return 0, False, "normal"
