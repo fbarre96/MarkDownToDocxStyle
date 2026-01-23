@@ -99,3 +99,21 @@ my code
     * You can specify another style by giving the style dictionnary as last arg for both functions. 
     * E.g : `markdownToWordInFile("/mypath/to/document.docx", "output_path.docx", {"BulletList":"my_bullet_style"})`
     
+## Advanced usage : Image styles
+
+Docx format supports image format but their is no easy way to save them in docx styles. As a workaround, a keyword arg named `image_modifier` exists for the function `convertMarkdownInFile`. It can be used like this to add a centered black shadow to all images:
+
+```python
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
+                                     image_modifier=['''<a:outerShdw blurRad="63500" sx="102000" sy="102000"
+                                                algn="ctr" rotWithShape="0">
+                                                <a:prstClr val="black">
+                                                    <a:alpha val="40000" />
+                                                </a:prstClr>
+                                            </a:outerShdw>'''])
+```
+
+It will add xml to all effectLst elements of pictures in the word document.
+
+To get your goal style, create an empty docx document, add a single image with desired format and save the document.
+Then, unzip the docx document as if it is a ZIP archive. Open the folder and then `word/document.xml` should display the XML. Look for your picture style and try to copy it.

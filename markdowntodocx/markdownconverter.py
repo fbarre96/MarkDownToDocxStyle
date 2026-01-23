@@ -244,7 +244,7 @@ code_style = None
 hyperlink_style = None
 mermaid_server = None
 
-def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None, mermaid_cli=None):
+def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None, mermaid_cli=None, image_modifier=None):
     global default_styles_names
     global styles
     global mermaid_server
@@ -279,8 +279,32 @@ def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_lin
     code_style = styles.get(default_styles_names.get("Code Car", "Code Car"), "macro")
     hyperlink_style = styles.get(default_styles_names.get("Hyperlink", "Hyperlink"), None)
     markdownToWordInDocument(document)
+    if image_modifier is not None:
+        modifyAllImagesInDocument(document, image_modifier)
     document.save(outfile)
     return True, outfile
+
+
+def modifyAllImagesInDocument(document, image_modifier):
+    shape_properties = document._body._element.xpath("//w:drawing//pic:pic/pic:spPr")
+    for spPr in shape_properties:
+        for modifier in image_modifier:
+            if spPr.find(".//a:effectLst", namespaces=spPr.nsmap) is None:
+                effectLst = OxmlElement("a:effectLst")
+                spPr.append(effectLst)
+            else:
+                effectLst = spPr.find(".//a:effectLst", namespaces=spPr.nsmap)
+            # Ensure the modifier XML string declares the 'a' namespace if needed
+            mod = modifier
+            if 'xmlns:a' not in mod and 'a:' in mod:
+                import re as _re
+                ns = spPr.nsmap.get('a', 'http://schemas.openxmlformats.org/drawingml/2006/main')
+                def _add_ns(m):
+                    return m.group(1) + ' xmlns:a="%s"' % ns
+                mod = _re.sub(r'(<\s*a:[^>\s/]+)', _add_ns, mod, count=1)
+            effectLst.append(parse_xml(mod))
+
+            
 
 def markdownToWordInDocument(document):
     ps = [ps for ps in getParagraphs(document)]
@@ -1107,7 +1131,13 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"})
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
+                                     image_modifier=['''<a:outerShdw blurRad="63500" sx="102000" sy="102000"
+                                                algn="ctr" rotWithShape="0">
+                                                <a:prstClr val="black">
+                                                    <a:alpha val="40000" />
+                                                </a:prstClr>
+                                            </a:outerShdw>'''])
 #     res, msg = markdownToWordFromString("""# H1 Header: Welcome to My Markdown Guide!
 
 # ## H2 Header: Quick Overview
