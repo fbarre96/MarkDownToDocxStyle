@@ -287,7 +287,7 @@ def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_lin
 def modifyAllImagesInDocument(document, image_modifier):
     for paragraph in getParagraphs(document):
         if paragraph.style.name == "ImageModifier":
-            shape_properties = paragraph._p.xpath("//w:drawing//pic:pic/pic:spPr")
+            shape_properties = paragraph._p.xpath(".//w:drawing//pic:pic/pic:spPr")
             for spPr in shape_properties:
                 for modifier in image_modifier:
                     if spPr.find(".//a:effectLst", namespaces=spPr.nsmap) is None:
@@ -1132,7 +1132,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/test_md.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
+    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" , {"Header":"Header"}, 
                                      image_modifier=['''<a:outerShdw blurRad="63500" sx="102000" sy="102000"
                                                 algn="ctr" rotWithShape="0">
                                                 <a:prstClr val="black">
