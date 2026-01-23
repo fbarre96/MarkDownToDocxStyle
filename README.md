@@ -101,7 +101,7 @@ my code
     
 ## Advanced usage : Image styles
 
-Docx format supports image format but their is no easy way to save them in docx styles. As a workaround, a keyword arg named `image_modifier` exists for the function `convertMarkdownInFile`. It can be used like this to add a centered black shadow to all images:
+Docx format supports image format but their is no easy way to save them in docx styles. As a workaround, a keyword arg named `image_modifier` exists for the function `convertMarkdownInFile`. It can be used like this to add a centered black shadow to all images in paragraph with a custom style named "ImageModifier":
 
 ```python
     res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
@@ -113,7 +113,7 @@ Docx format supports image format but their is no easy way to save them in docx 
                                             </a:outerShdw>'''])
 ```
 
-It will add xml to all effectLst elements of pictures in the word document.
+It will add xml to all effectLst elements of pictures in the word document in paragraph with a custom style named "ImageModifier".
 
 To get your goal style, create an empty docx document, add a single image with desired format and save the document.
 Then, unzip the docx document as if it is a ZIP archive. Open the folder and then `word/document.xml` should display the XML. Look for your picture style and try to copy it.

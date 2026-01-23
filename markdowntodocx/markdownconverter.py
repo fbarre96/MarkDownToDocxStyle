@@ -275,7 +275,6 @@ def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_lin
                 return False, "Error in template. There is a style missing : "+str(style_name)
     global code_style
     global hyperlink_style
-   
     code_style = styles.get(default_styles_names.get("Code Car", "Code Car"), "macro")
     hyperlink_style = styles.get(default_styles_names.get("Hyperlink", "Hyperlink"), None)
     markdownToWordInDocument(document)
@@ -286,23 +285,25 @@ def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_lin
 
 
 def modifyAllImagesInDocument(document, image_modifier):
-    shape_properties = document._body._element.xpath("//w:drawing//pic:pic/pic:spPr")
-    for spPr in shape_properties:
-        for modifier in image_modifier:
-            if spPr.find(".//a:effectLst", namespaces=spPr.nsmap) is None:
-                effectLst = OxmlElement("a:effectLst")
-                spPr.append(effectLst)
-            else:
-                effectLst = spPr.find(".//a:effectLst", namespaces=spPr.nsmap)
-            # Ensure the modifier XML string declares the 'a' namespace if needed
-            mod = modifier
-            if 'xmlns:a' not in mod and 'a:' in mod:
-                import re as _re
-                ns = spPr.nsmap.get('a', 'http://schemas.openxmlformats.org/drawingml/2006/main')
-                def _add_ns(m):
-                    return m.group(1) + ' xmlns:a="%s"' % ns
-                mod = _re.sub(r'(<\s*a:[^>\s/]+)', _add_ns, mod, count=1)
-            effectLst.append(parse_xml(mod))
+    for paragraph in getParagraphs(document):
+        if paragraph.style.name == "ImageModifier":
+            shape_properties = paragraph._p.xpath("//w:drawing//pic:pic/pic:spPr")
+            for spPr in shape_properties:
+                for modifier in image_modifier:
+                    if spPr.find(".//a:effectLst", namespaces=spPr.nsmap) is None:
+                        effectLst = OxmlElement("a:effectLst")
+                        spPr.append(effectLst)
+                    else:
+                        effectLst = spPr.find(".//a:effectLst", namespaces=spPr.nsmap)
+                    # Ensure the modifier XML string declares the 'a' namespace if needed
+                    mod = modifier
+                    if 'xmlns:a' not in mod and 'a:' in mod:
+                        import re as _re
+                        ns = spPr.nsmap.get('a', 'http://schemas.openxmlformats.org/drawingml/2006/main')
+                        def _add_ns(m):
+                            return m.group(1) + ' xmlns:a="%s"' % ns
+                        mod = _re.sub(r'(<\s*a:[^>\s/]+)', _add_ns, mod, count=1)
+                    effectLst.append(parse_xml(mod))
 
             
 
@@ -1131,7 +1132,7 @@ def insert_paragraph_after(paragraph, text=None, style=None):
 
 
 if __name__ == '__main__':
-    res, msg = convertMarkdownInFile("examples/in_document.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
+    res, msg = convertMarkdownInFile("examples/test_md.docx", "examples/out_document.docx" ,{"Header":"Header"}, 
                                      image_modifier=['''<a:outerShdw blurRad="63500" sx="102000" sy="102000"
                                                 algn="ctr" rotWithShape="0">
                                                 <a:prstClr val="black">
