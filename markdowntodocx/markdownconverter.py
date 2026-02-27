@@ -604,6 +604,13 @@ def mardownCodeBlockToWordStyle(paragraph, code_style, state):
         if current_code_lexer and paragraph.text.strip():
             apply_syntax_highlighting(paragraph, paragraph.text, current_code_lexer, code_style)
     
+    if paragraph.text.strip().startswith("```") and state != "code_block" and paragraph.text[3:].strip().endswith("```"):
+        # inline as block
+        code_content = paragraph.text.strip()[3:-3]
+        paragraph.style = code_style
+        paragraph.text = code_content
+        return state
+
     if "```" in paragraph.text and state != "code_block":
         lexer = None
         try:
