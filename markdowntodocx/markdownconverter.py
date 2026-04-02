@@ -36,6 +36,13 @@ from docx.oxml.xmlchemy import (
 )
 from docx.shared import Parented
 import subprocess
+import logging
+
+# Configure basic console logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s'
+)
 
 
 LIMITE_ITERATIONS=10
@@ -243,6 +250,7 @@ styles = {}
 code_style = None
 hyperlink_style = None
 mermaid_server = None
+latestColorMatched = None
 
 def convertMarkdownInFile(infile, outfile, styles_names=None, mermaid_server_link=None, mermaid_cli=None, image_modifier=None):
     global default_styles_names
@@ -595,6 +603,13 @@ def apply_syntax_highlighting(paragraph, code_text, lexer, code_style):
 # Global variable to store current lexer for code blocks
 current_code_lexer = None
 
+def do_merge_runs(paragraph, pos1, pos2):
+    run1 = paragraph.all_runs[pos1]
+    run2 = paragraph.all_runs[pos2]
+    run1.text += run2.text
+    copy_format_manual(run2, run1)
+    paragraph._p.remove(run2.element) # pylint: disable=protected-access
+
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
     global current_code_lexer
     
@@ -668,24 +683,16 @@ def markdownToWordInParagraph(document, paragraph, state):
     state = mardownCodeBlockToWordStyle(paragraph, styles.get(default_styles_names.get("Code","Code"), "Macro Text"), state)
     return state, deleted_count + deleted_count_2
 
-def setColor(paragraph, run, match):
-    # match.group(0) is <color:RGB>text</color> 
-    # match.group(1) is <color
-    # match.group(2) is RGB>text
-    # match.group(3) is </color>
-    #or
-    # match.group(0) is <span style="color: rgb(0,0,0);">text</span>
-    # match.group(1) is <span style="color: 
-    # match.group(2) is rgb(0,0,0);">text
-    # match.group(3) is </span>
-    
-
+def setColorMatched(paragraph, run, match):
     splitted = match.group(2).split(">")
+    if len(splitted) != 2:
+        raise ValueError("Color match regex should have exactly 2 groups separated by >. Found : "+str(splitted))
+    global latestColorMatched
     if splitted[0].startswith("rgb("):
         r,g,b = splitted[0][4:-1].split(",")
         b = b.split(")")[0]
         try:
-            run.font.color.rgb = RGBColor(int(r.strip()), int(g.strip()), int(b.strip()))
+            latestColorMatched = RGBColor(int(r.strip()), int(g.strip()), int(b.strip()))
         except ValueError:
             pass
     else:
@@ -693,10 +700,18 @@ def setColor(paragraph, run, match):
         color_string = color_string.strip().replace("#", "")
         if len(color_string) != 6:
             raise ValueError("RGB hex string must be exactly 6 characters long")
-        run.font.color.rgb = RGBColor.from_string(color_string)
-    initial_len = len(run.text)
-    run.text = ">".join(splitted[1:])
-    return initial_len-len(run.text), False, "normal"
+        latestColorMatched = RGBColor.from_string(color_string)
+    deleted_count = len(run.text)
+    run.text = ""
+    return deleted_count, False, "normal"
+
+
+def setColor(paragraph, run, match):
+    global latestColorMatched
+    if latestColorMatched is None:
+        raise ValueError("setColor should be called after setColorMatched and before any other color change")
+    run.font.color.rgb = latestColorMatched
+    return 0, False, "normal"
 
 def markdownToWordInParagraphCar(document, paragraph, state):
     if paragraph.style.name == code_style.name or paragraph.style.name == "Code":
@@ -706,14 +721,14 @@ def markdownToWordInParagraphCar(document, paragraph, state):
         markdownHeaderToWordStyle(paragraph)
 
         transform_marker(paragraph, "`", setCode)
-        transform_regex(paragraph, r"(<color:)(.*?>.*?)(</color>)", (delCar, setColor, delCar))
-        transform_regex(paragraph, r"(<span\s+style=\"color: )(.*?>.*?)(</span>)", (delCar, setColor, delCar))
+        transform_regex(paragraph, r"(<color:)([a-fA-F0-9]+>)(.*?)(</color>)", (delCar, setColorMatched, setColor, delCar))
+        transform_regex(paragraph, r"(<span\s+style=\"color: )([a-fA-F0-9]+>)(.*?)(</span>)", (delCar, setColorMatched, setColor, delCar))
 
         #bookmarks [#bookmark]
         lambda_book = lambda para, run, match: setBookmark(document, para, run, match)
-        transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar))
+        transform_regex(paragraph, r"(\[#)([^\]\n]*)(\])(?!\w)", (delCar, lambda_book, delCar), merge_runs=True)
         # markdown hyper link in the format [text to display](link)
-        transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar))
+        transform_regex(paragraph, r"(?<!\!)(\[)([^\]|^\n]+)(\]\()([^\)|^\n]+)(\))", (delCar, setHyperlink, delCar, delCar, delCar), merge_runs=True)
         # markdown image hyper link to incorporate in the format ![alt text to display](link)
         transform_regex(paragraph, r"(\!\[)([^\]|^\n]+)(\]\()([^\)|^\n]+\.(?:png|jpg|jpeg|gif))(\))", (delCar, linkImageToImage, delCar, delCar, delCar))
         # just make left hyperlinks clickable
@@ -745,9 +760,9 @@ def markdownToWordInParagraphCar(document, paragraph, state):
             footnote = footnotes[footnote_id]
             paragraph = DocxParagraph(paragraph._p, footnote)
             lambda_sethyperlink_footnote = lambda para, run, match: setHyperlink(para, run, match, document=document, is_footnote=True)
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (lambda_sethyperlink_footnote,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (lambda_sethyperlink_footnote,), merge_runs=True)
         else:
-            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (setHyperlink,))
+            transform_regex(paragraph, r"(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+\*.~#?&//=]*[-a-zA-Z0-9@:%_\+\*~#?&//=]))", (setHyperlink,), merge_runs=True)
         transform_marker(paragraph, "==", setHighlight)
         transform_marker(paragraph, "**", setBold)
         transform_marker(paragraph, "__", setBold)
@@ -940,15 +955,19 @@ def transform_marker(paragraph, marker, func, content_regex=None):
     return transform_regex(paragraph, regex, (delCar, func, delCar))
 
 
-def transform_regex(paragraph, regex, funcs):
+def transform_regex(paragraph, regex, funcs, merge_runs=False):
     deletedCars = 0
     state = "normal"
+    matched = False
     regex = re.compile(regex, re.MULTILINE)
+    originalText = paragraph.text
     # find every iteration of marker+content+marker in paragraph
     for match in regex.finditer(paragraph.text):
         # get starting marker run index and ending marker run index
+        matched = True
         positions = []
         core_pos = [x[0]-deletedCars for x in match.regs[1:]]
+        end_pos = match.regs[-1][1]-deletedCars-1
         positions += core_pos # Get starting pos of match of each group
         positions.append(match.regs[0][1]-deletedCars)
         runs = getRunsIndexFromPositions(paragraph, positions)
@@ -960,11 +979,26 @@ def transform_regex(paragraph, regex, funcs):
             run = paragraph.all_runs[run_pos[0]]
             if run_pos[1] != 0: # if not at the beginning of the run
                 split_run_in_two(paragraph, run, run_pos[1])
+        # merge runs if needed (for example for hyperlinks that can be split into many runs because of the markers)
+        if merge_runs:
+            runs = getRunsIndexFromPositions(paragraph, positions)
+            for i in range(len(runs)-1, 0, -1):
+                if runs[i] is None or runs[i][1] != 0 or runs[i-1] is None or runs[i-1][1] != 0:
+                    continue
+                while runs[i][0] > runs[i-1][0]+1: # if the two markers are not in the same run, we merge all runs between them to have the content in one run
+                    do_merge_runs(paragraph,  runs[i][0]-1, runs[i][0])
+                    runs[i] = (runs[i][0]-1, 0)
 
         runs_delimiters = [x[0] for x in getRunsIndexFromPositions(paragraph, core_pos) if x is not None] # recalculate runs index after splits
+        last_run = getRunsIndexFromPositions(paragraph, [end_pos])[0]
+        if last_run is not None:
+            index_max_run = last_run[0]
+        else:
+            index_max_run = len(paragraph.all_runs)-1
+                
         # apply transformation func on all runs found
         index_min_run = min(runs_delimiters) # run index of first marker matched
-        index_max_run = max(runs_delimiters) # run index of last marker matched
+        #index_max_run = max(runs_delimiters) # run index of last marker matched
         runs_iterator = index_min_run
         initial_run_counter = runs_iterator
         current_core_pos = 0
@@ -978,6 +1012,8 @@ def transform_regex(paragraph, regex, funcs):
             initial_run_counter += 1
             deletedCars += deleted_count
             current_core_pos = runs_delimiters.index(initial_run_counter) if initial_run_counter in runs_delimiters else current_core_pos
+    if matched:
+        logging.debug(f"transform_regex: regex '{regex.pattern}' applied with funcs {funcs} on paragraph \n '-->{originalText}'\n<--{paragraph.text}'")        
     return state
 
 def markdownHeaderToWordStyle(paragraph):
