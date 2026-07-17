@@ -721,7 +721,7 @@ def markdownToWordInParagraphCar(document, paragraph, state):
         markdownHeaderToWordStyle(paragraph)
 
         transform_marker(paragraph, "`", setCode)
-        transform_regex(paragraph, r"(<color:)([a-fA-F0-9]+>)(.*?)(</color>)", (delCar, setColorMatched, setColor, delCar))
+        transform_regex(paragraph, r"(<color:#?)([a-fA-F0-9]+>)(.*?)(</color>)", (delCar, setColorMatched, setColor, delCar))
         transform_regex(paragraph, r"(<span\s+style=\"color: )([a-fA-F0-9]+>)(.*?)(</span>)", (delCar, setColorMatched, setColor, delCar))
 
         #bookmarks [#bookmark]
