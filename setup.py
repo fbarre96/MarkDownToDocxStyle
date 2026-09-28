@@ -22,4 +22,10 @@ setup(
     author='Fabien Barre',
     license='MIT',
     install_requires=requirements,
+    python_requires='>=3.8',
+    entry_points={
+        'console_scripts': [
+            'markdowntodocx=markdowntodocx.cli:main',
+        ],
+    },
 )

@@ -1,9 +1,25 @@
 # MarkDownToDocxStyle
-Convert Markdown inside Office Word documents
+Library and tool to convert Markdown inside Office Word documents
 
 ## Installation
 
+As a library, you may install it as :
 `pip install markdowntodocx`
+
+To install it only as a command line tool, in its own isolated environment:
+
+`pipx install markdowntodocx` (or `pipx install .` from a clone of this repository)
+
+## Command line usage
+
+```
+markdowntodocx input.docx output.docx
+markdowntodocx input.docx output.docx -s "Code Car=CodeStyle" -s BulletList=MyBulletStyle
+markdowntodocx input.docx output.docx --mermaid-cli mmdc
+markdowntodocx input.docx output.docx --image-modifier shadow.xml
+```
+
+Run `markdowntodocx --help` for all options. `python -m markdowntodocx` works too.
 
 ## Usage
 

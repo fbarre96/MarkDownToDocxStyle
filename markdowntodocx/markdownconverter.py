@@ -39,10 +39,7 @@ import subprocess
 import logging
 
 # Configure basic console logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s: %(message)s'
-)
+logger = logging.getLogger(__name__)
 
 
 LIMITE_ITERATIONS=10
@@ -1013,7 +1010,7 @@ def transform_regex(paragraph, regex, funcs, merge_runs=False):
             deletedCars += deleted_count
             current_core_pos = runs_delimiters.index(initial_run_counter) if initial_run_counter in runs_delimiters else current_core_pos
     if matched:
-        logging.debug(f"transform_regex: regex '{regex.pattern}' applied with funcs {funcs} on paragraph \n '-->{originalText}'\n<--{paragraph.text}'")        
+        logger.debug(f"transform_regex: regex '{regex.pattern}' applied with funcs {funcs} on paragraph \n '-->{originalText}'\n<--{paragraph.text}'")        
     return state
 
 def markdownHeaderToWordStyle(paragraph):
