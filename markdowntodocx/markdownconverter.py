@@ -588,7 +588,7 @@ def apply_syntax_highlighting(paragraph, code_text, lexer, code_style):
                 if color:
                     run.font.color.rgb = color
                     
-            elif token_type is Token.Text.Whitespace and text != "\n":
+            elif (token_type is Token.Text.Whitespace or token_type.Whitespace is Token.Text.Whitespace) and text != "\n":
                 paragraph.add_run(text)
                 
                 
