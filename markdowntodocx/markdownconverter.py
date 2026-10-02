@@ -513,7 +513,6 @@ def markdownMermaidToImage(document, paragraph, state):
 def apply_syntax_highlighting(paragraph, code_text, lexer, code_style):
     """Apply syntax highlighting to code text using Pygments."""
     from pygments.token import Token
-    
     # Color mapping for different token types
     color_map = {
         Token.Keyword: RGBColor(0xAC,0x7C, 0x8A),       # pink for keywords
@@ -570,6 +569,7 @@ def apply_syntax_highlighting(paragraph, code_text, lexer, code_style):
         
         for token_type, text in tokens:
             if text.strip():  # Skip empty tokens
+                text = text.rstrip("\n")
                 run = paragraph.add_run(text)
                 # Apply color based on token type
                 # Check for exact match first, then parent types
@@ -609,7 +609,6 @@ def do_merge_runs(paragraph, pos1, pos2):
 
 def mardownCodeBlockToWordStyle(paragraph, code_style, state):
     global current_code_lexer
-    
     if state == "code_block":
         paragraph.style = code_style
         # Apply syntax highlighting if we have a stored lexer

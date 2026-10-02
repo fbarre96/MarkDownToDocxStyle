@@ -14,7 +14,7 @@ with open(HERE / "requirements.txt", "r", encoding="utf-8") as f:
 setup(
     name='markdowntodocx',
     packages=find_packages(include=['markdowntodocx']),
-    version='0.1.9.7',
+    version='0.1.9.8',
     url="https://github.com/fbarre96/MarkDownToDocxStyle",
     description='Convert markdown inside Docx to docx styles',
     long_description=README,
